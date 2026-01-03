@@ -47,7 +47,6 @@ export function RepoDetailHeader({
                 isWorktree={isWorktree}
                 repoUrl={repoUrl}
                 className="hidden sm:flex w-[140px] max-w-[140px]"
-                iconOnly
               />
             ) : branchToDisplay ? (
               <Badge
