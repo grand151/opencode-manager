@@ -21,6 +21,7 @@ export default defineConfig([
     },
     rules: {
       'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'react-hooks/exhaustive-deps': 'warn',
     },
   },
   {
