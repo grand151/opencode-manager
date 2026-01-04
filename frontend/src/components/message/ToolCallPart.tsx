@@ -205,13 +205,8 @@ export function ToolCallPart({ part, onFileClick, onChildSessionClick }: ToolCal
 
     if (part.state.status === 'completed') {
       return (
-        <div className="my-2">
-          <TodoListDisplay
-            todos={todoData || []}
-            title="Task List"
-            showCompleted={true}
-            scrollCurrentOnly={true}
-          />
+        <div className="my-2 text-xs text-muted-foreground">
+          Task list updated
         </div>
       )
     }

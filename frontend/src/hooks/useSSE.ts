@@ -6,6 +6,7 @@ import { permissionEvents } from './usePermissionRequests'
 import { showToast } from '@/lib/toast'
 import { settingsApi } from '@/api/settings'
 import { useSessionStatus } from '@/stores/sessionStatusStore'
+import { useSessionTodos } from '@/stores/sessionTodosStore'
 
 const MAX_RECONNECT_DELAY = 30000
 const INITIAL_RECONNECT_DELAY = 1000
@@ -52,6 +53,7 @@ export const useSSE = (opcodeUrl: string | null | undefined, directory?: string)
   const [error, setError] = useState<string | null>(null)
   const [isReconnecting, setIsReconnecting] = useState(false)
   const setSessionStatus = useSessionStatus((state) => state.setStatus)
+  const setSessionTodos = useSessionTodos((state) => state.setTodos)
 
   const scheduleReconnect = useCallback((connectFn: () => void) => {
     if (!mountedRef.current) return
@@ -326,9 +328,11 @@ export const useSSE = (opcodeUrl: string | null | undefined, directory?: string)
           break
 
         case 'todo.updated':
-          if ('sessionID' in event.properties) {
+          if ('sessionID' in event.properties && 'todos' in event.properties) {
+            const { sessionID, todos } = event.properties
+            setSessionTodos(sessionID, todos)
             queryClient.invalidateQueries({ 
-              queryKey: ['opencode', 'todos', opcodeUrl, event.properties.sessionID, directory] 
+              queryKey: ['opencode', 'todos', opcodeUrl, sessionID, directory] 
             })
           }
           break
@@ -450,7 +454,7 @@ export const useSSE = (opcodeUrl: string | null | undefined, directory?: string)
         setIsConnected(false)
       }
     }
-  }, [client, queryClient, opcodeUrl, directory, scheduleReconnect, resetReconnectDelay, setSessionStatus])
+  }, [client, queryClient, opcodeUrl, directory, scheduleReconnect, resetReconnectDelay, setSessionStatus, setSessionTodos])
 
   return { isConnected, error, isReconnecting }
 }
