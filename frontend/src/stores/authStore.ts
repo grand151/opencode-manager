@@ -9,6 +9,7 @@ interface AuthState {
   loading: boolean
   error: string | null
   initialized: boolean
+  authListener: { unsubscribe: () => void } | null
   
   setUser: (user: User | null) => void
   setSession: (session: Session | null) => void
@@ -29,6 +30,7 @@ export const useAuthStore = create<AuthState>()(
       loading: false,
       error: null,
       initialized: false,
+      authListener: null,
 
       setUser: (user) => set({ user }),
       setSession: (session) => set({ session }),
@@ -107,7 +109,12 @@ export const useAuthStore = create<AuthState>()(
       },
 
       initialize: async () => {
-        if (get().initialized) return
+        const state = get()
+        if (state.initialized) return
+
+        if (state.authListener) {
+          state.authListener.unsubscribe()
+        }
 
         set({ loading: true })
         try {
@@ -127,12 +134,14 @@ export const useAuthStore = create<AuthState>()(
             })
           }
 
-          supabase.auth.onAuthStateChange((_event, session) => {
+          const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
             set({
               user: session?.user ?? null,
-              session: session,
+              session,
             })
           })
+
+          set({ authListener: listener.subscription })
         } catch (error) {
           const authError = error as AuthError
           set({

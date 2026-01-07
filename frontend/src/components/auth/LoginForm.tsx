@@ -72,7 +72,7 @@ export function LoginForm() {
           {!configured && (
             <div className="mb-4 p-4 rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
               <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                <strong>Supabase not configured.</strong> Please set up your Supabase project and add the credentials to your <code className="px-1 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/40">.env</code> file. See <a href="https://github.com/grand151/opencode-manager/blob/main/SUPABASE_SETUP.md" target="_blank" rel="noopener noreferrer" className="underline">SUPABASE_SETUP.md</a> for instructions.
+                <strong>Supabase not configured.</strong> Please set up your Supabase project and add the credentials to your <code className="px-1 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/40">.env</code> file. See <a href="/SUPABASE_SETUP.md" className="underline">SUPABASE_SETUP.md</a> for instructions.
               </p>
             </div>
           )}
