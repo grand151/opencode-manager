@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuthStore } from '@/stores/authStore'
+import { isSupabaseConfigured } from '@/services/supabaseClient'
 import {
   Card,
   CardContent,
@@ -32,6 +33,7 @@ type FormValues = z.infer<typeof formSchema>
 export function LoginForm() {
   const [isSignUp, setIsSignUp] = useState(false)
   const { signIn, signUp, loading, error } = useAuthStore()
+  const configured = isSupabaseConfigured()
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -67,6 +69,13 @@ export function LoginForm() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {!configured && (
+            <div className="mb-4 p-4 rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                <strong>Supabase not configured.</strong> Please set up your Supabase project and add the credentials to your <code className="px-1 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/40">.env</code> file. See <a href="https://github.com/grand151/opencode-manager/blob/main/SUPABASE_SETUP.md" target="_blank" rel="noopener noreferrer" className="underline">SUPABASE_SETUP.md</a> for instructions.
+              </p>
+            </div>
+          )}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -110,7 +119,7 @@ export function LoginForm() {
                   {error}
                 </div>
               )}
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full" disabled={loading || !configured}>
                 {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
               </Button>
             </form>
