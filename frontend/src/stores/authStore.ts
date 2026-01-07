@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase } from '@/services/supabaseClient'
-import type { User, AuthError, Session } from '@supabase/supabase-js'
+import type { User, AuthError, Session, AuthChangeEvent } from '@supabase/supabase-js'
 
 interface AuthState {
   user: User | null
@@ -9,7 +9,7 @@ interface AuthState {
   loading: boolean
   error: string | null
   initialized: boolean
-  authListener: { unsubscribe: () => void } | null
+  authListenerCleanup: (() => void) | null
   
   setUser: (user: User | null) => void
   setSession: (session: Session | null) => void
@@ -30,7 +30,7 @@ export const useAuthStore = create<AuthState>()(
       loading: false,
       error: null,
       initialized: false,
-      authListener: null,
+      authListenerCleanup: null,
 
       setUser: (user) => set({ user }),
       setSession: (session) => set({ session }),
@@ -112,8 +112,8 @@ export const useAuthStore = create<AuthState>()(
         const state = get()
         if (state.initialized) return
 
-        if (state.authListener) {
-          state.authListener.unsubscribe()
+        if (state.authListenerCleanup) {
+          state.authListenerCleanup()
         }
 
         set({ loading: true })
@@ -134,14 +134,14 @@ export const useAuthStore = create<AuthState>()(
             })
           }
 
-          const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+          const { data: listener } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
             set({
               user: session?.user ?? null,
               session,
             })
           })
 
-          set({ authListener: listener.subscription })
+          set({ authListenerCleanup: () => listener.subscription.unsubscribe() })
         } catch (error) {
           const authError = error as AuthError
           set({
