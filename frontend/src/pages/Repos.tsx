@@ -5,6 +5,7 @@ import { FileBrowserSheet } from "@/components/file-browser/FileBrowserSheet";
 import { Header } from "@/components/ui/header";
 import { Button } from "@/components/ui/button";
 import { Plus, FolderOpen } from "lucide-react";
+import { UserMenu } from "@/components/auth/UserMenu";
 
 export function Repos() {
   const [addRepoOpen, setAddRepoOpen] = useState(false);
@@ -33,6 +34,7 @@ export function Repos() {
             <Plus className="w-4 h-4 mr-1" />
             Repo
           </Button>
+          <UserMenu />
           <Header.Settings />
         </Header.Actions>
       </Header>

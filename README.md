@@ -100,9 +100,47 @@ Mobile-first web interface for OpenCode AI agents. Manage, control, and code wit
 </tr>
 </table>
 
-## Coming Soon
+## Authentication
 
--  **Authentication** - User authentication and session management
+OpenCode Manager now supports user authentication via **Supabase** - a powerful, open-source Firebase alternative built on PostgreSQL.
+
+### Features
+
+- **Email/Password Authentication** - Secure sign-up and sign-in with email verification
+- **Session Management** - Persistent sessions with automatic token refresh
+- **Protected Routes** - Route-level protection requiring authentication
+- **User Menu** - Easy access to account information and sign-out
+- **State Management** - Zustand-based auth store with local persistence
+
+### Setup
+
+To enable authentication in your OpenCode Manager instance:
+
+1. **Create a Supabase account** at https://supabase.com
+2. **Create a new project** in the Supabase dashboard
+3. **Get your credentials** from Settings → API
+4. **Configure environment variables** in your `.env` file:
+   ```bash
+   VITE_SUPABASE_URL=https://your-project.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-anon-key-here
+   ```
+5. **Restart your development server** or rebuild for production
+
+For detailed setup instructions, see [SUPABASE_SETUP.md](./SUPABASE_SETUP.md).
+
+### Optional Configuration
+
+- **Email Templates** - Customize confirmation and password reset emails
+- **OAuth Providers** - Add Google, GitHub, and other social login options
+- **Row Level Security** - Set up database policies for user data
+- **User Profiles** - Extend with custom user profile tables
+
+### Coming Soon
+
+- Password reset functionality
+- User profile management
+- Role-based access control
+- OAuth social login integrations
 
 ## Installation
 
