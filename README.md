@@ -113,6 +113,7 @@ Choose the installation method that works best for you:
 1. **[Docker](#option-1-docker-recommended-for-production)** - Easiest setup, works anywhere
 2. **[Local Development](#option-2-local-development-contributors)** - For contributors
 3. **[Termux (Android)](#option-3-termux-android-mobile)** - Run on your phone ([Full Guide](./TERMUX.md))
+4. **[Production Deployment](#production-deployment)** - Deploy to VPS, Easypanel, or cloud ([Full Guide](./DEPLOYMENT.md))
 
 ### Option 1: Docker (Recommended for Production)
 
@@ -124,7 +125,7 @@ cd opencode-manager
 # Start with Docker Compose (single container)
 docker-compose up -d
 
-# Access the application at http://localhost:5001
+# Access the application at http://localhost:5003
 ```
 
 The Docker setup automatically:
@@ -306,6 +307,24 @@ opencode --version
 - Use Wi-Fi for better stability during package installation
 - Consider using Termux:Widget for quick app startup
 - Enable "Acquire wakelock" in Termux settings to prevent sleep interruptions
+
+### Production Deployment
+
+For production deployments on VPS, Easypanel, or cloud platforms, see the comprehensive [DEPLOYMENT.md](./DEPLOYMENT.md) guide.
+
+**Quick links:**
+- **[Easypanel Deployment](./DEPLOYMENT.md#easypanel-deployment-recommended)** - One-click deployment with automatic SSL
+- **[Docker Compose on VPS](./DEPLOYMENT.md#docker-compose-on-vps)** - Manual VPS deployment
+- **[Environment Variables](./DEPLOYMENT.md#environment-variables)** - Complete configuration reference
+- **[Backup & Restore](./DEPLOYMENT.md#backup-and-restore)** - Data protection strategies
+
+**Key features for production:**
+- ✅ Automatic SSL with Let's Encrypt (Easypanel)
+- ✅ Health checks and auto-restart
+- ✅ Persistent data volumes
+- ✅ Environment-based configuration
+- ✅ Reverse proxy support (Traefik/Nginx/Caddy)
+- ✅ Horizontal scaling ready
 
 ## OAuth Provider Setup
 

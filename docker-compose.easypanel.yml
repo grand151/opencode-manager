@@ -1,0 +1,98 @@
+# Docker Compose configuration optimized for Easypanel deployment
+# This is a simplified version for easy deployment on Easypanel
+# For advanced configuration, use docker-compose.yml
+
+services:
+  app:
+    # Use pre-built image from GitHub Container Registry
+    # Or change to 'build: .' to build from source
+    image: ghcr.io/grand151/opencode-manager:latest
+    # Uncomment below to build from source instead
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    
+    container_name: opencode-manager
+    
+    # Ports for direct access
+    # Easypanel will handle SSL/domain via Traefik
+    ports:
+      - "5003:5003"      # Main application
+      - "5100:5100"      # Dev server 1
+      - "5101:5101"      # Dev server 2
+      - "5102:5102"      # Dev server 3
+      - "5103:5103"      # Dev server 4
+    
+    # Environment configuration
+    # Override these in Easypanel environment variables
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=5003
+      - CORS_ORIGIN=*
+      - OPENCODE_SERVER_PORT=5551
+      - DATABASE_PATH=/app/data/opencode.db
+      - WORKSPACE_PATH=/workspace
+      - PROCESS_START_WAIT_MS=2000
+      - PROCESS_VERIFY_WAIT_MS=1000
+      - HEALTH_CHECK_INTERVAL_MS=5000
+      - HEALTH_CHECK_TIMEOUT_MS=30000
+      - MAX_FILE_SIZE_MB=50
+      - MAX_UPLOAD_SIZE_MB=50
+      - SANDBOX_TTL_HOURS=24
+      - CLEANUP_INTERVAL_MINUTES=60
+      - DEBUG=false
+      - LOG_LEVEL=info
+    
+    # Persistent storage
+    volumes:
+      - opencode-workspace:/workspace
+      - opencode-data:/app/data
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Traefik labels for Easypanel reverse proxy
+    # Replace 'yourdomain.com' with your actual domain in Easypanel
+    labels:
+      # Enable Traefik
+      - "traefik.enable=true"
+      
+      # HTTPS configuration
+      - "traefik.http.routers.opencode-manager.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.opencode-manager.entrypoints=websecure"
+      - "traefik.http.routers.opencode-manager.tls.certresolver=letsencrypt"
+      - "traefik.http.services.opencode-manager.loadbalancer.server.port=5003"
+      
+      # HTTP to HTTPS redirect
+      - "traefik.http.routers.opencode-manager-http.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.opencode-manager-http.entrypoints=web"
+      - "traefik.http.routers.opencode-manager-http.middlewares=https-redirect"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.permanent=true"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5003/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    
+    # Network configuration
+    networks:
+      - easypanel
+
+# Named volumes for data persistence
+volumes:
+  opencode-workspace:
+    driver: local
+  opencode-data:
+    driver: local
+
+# Network configuration
+networks:
+  easypanel:
+    external: true
+    # Easypanel creates this network automatically
+    # If deployment fails, remove 'external: true' and it will be created
