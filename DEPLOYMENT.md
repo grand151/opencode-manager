@@ -85,7 +85,9 @@ Access Easypanel at `http://your-vps-ip:3000` and complete the setup wizard.
    PROCESS_START_WAIT_MS=3000
    HEALTH_CHECK_TIMEOUT_MS=45000
    
-   # Optional: File upload limits
+   # Optional: File upload limits (requires adequate storage and memory)
+   # Note: Increasing these values requires sufficient VPS resources
+   # Recommended: Add 1GB RAM per 100MB increase in file size limits
    MAX_FILE_SIZE_MB=100
    MAX_UPLOAD_SIZE_MB=100
    ```

@@ -93,6 +93,9 @@ volumes:
 # Network configuration
 networks:
   easypanel:
+    # Easypanel creates the 'easypanel' network automatically
+    # If you get "network not found" error during deployment:
+    # 1. Remove the 'external: true' line below
+    # 2. Or create network manually: docker network create easypanel
+    # 3. Or remove this entire networks section to use default bridge network
     external: true
-    # Easypanel creates this network automatically
-    # If deployment fails, remove 'external: true' and it will be created

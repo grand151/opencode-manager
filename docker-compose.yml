@@ -1,3 +1,14 @@
+# OpenCode Manager - Docker Compose Configuration
+# 
+# For production deployment with Easypanel:
+# 1. Set DOMAIN environment variable to your domain (e.g., opencode.example.com)
+# 2. All other variables have sensible defaults
+# 3. See DEPLOYMENT.md for complete guide
+#
+# For local development:
+# - Use default values (no .env file needed)
+# - Access at http://localhost:5003
+
 services:
   app:
     build:
@@ -35,12 +46,12 @@ services:
     labels:
       # Easypanel / Traefik labels for reverse proxy
       - "traefik.enable=true"
-      - "traefik.http.routers.opencode-manager.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.opencode-manager.rule=Host(`${DOMAIN:-app.example.com}`)"
       - "traefik.http.routers.opencode-manager.entrypoints=websecure"
       - "traefik.http.routers.opencode-manager.tls.certresolver=letsencrypt"
       - "traefik.http.services.opencode-manager.loadbalancer.server.port=5003"
       # Optional: HTTP to HTTPS redirect
-      - "traefik.http.routers.opencode-manager-http.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.opencode-manager-http.rule=Host(`${DOMAIN:-app.example.com}`)"
       - "traefik.http.routers.opencode-manager-http.entrypoints=web"
       - "traefik.http.routers.opencode-manager-http.middlewares=https-redirect"
       - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
