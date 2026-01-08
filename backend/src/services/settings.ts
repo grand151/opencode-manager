@@ -1,4 +1,4 @@
-import { Database } from 'bun:sqlite'
+import type { Database } from '../db/database-adapter'
 import { unlinkSync, existsSync } from 'fs'
 import { getOpenCodeConfigFilePath } from '@opencode-manager/shared/config/env'
 import { logger } from '../utils/logger'

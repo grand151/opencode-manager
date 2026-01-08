@@ -1,6 +1,8 @@
 # OpenCode Manager
 
-Mobile-first web interface for OpenCode AI agents. Manage, control, and code with OpenCode from any device - your phone, tablet, or desktop. Features Git integration, file management, and real-time chat in a responsive PWA. Deploy with Docker for instant setup. View diffs, edit files and much more.  
+Mobile-first web interface for OpenCode AI agents. Manage, control, and code with OpenCode from any device - your phone, tablet, or desktop. Features Git integration, file management, and real-time chat in a responsive PWA. Deploy with Docker for instant setup. View diffs, edit files and much more.
+
+**📱 Now supports Termux!** Run the full stack on your Android device. See [TERMUX.md](./TERMUX.md) for installation guide.  
 
 ## Features
 
@@ -105,6 +107,12 @@ Mobile-first web interface for OpenCode AI agents. Manage, control, and code wit
 -  **Authentication** - User authentication and session management
 
 ## Installation
+
+Choose the installation method that works best for you:
+
+1. **[Docker](#option-1-docker-recommended-for-production)** - Easiest setup, works anywhere
+2. **[Local Development](#option-2-local-development-contributors)** - For contributors
+3. **[Termux (Android)](#option-3-termux-android-mobile)** - Run on your phone ([Full Guide](./TERMUX.md))
 
 ### Option 1: Docker (Recommended for Production)
 
@@ -212,6 +220,92 @@ cp .env.example .env
 # Start development servers (backend + frontend)
 pnpm dev
 ```
+
+### Option 3: Termux (Android Mobile)
+
+Run OpenCode Manager directly on your Android device using Termux - no Docker or desktop required.
+
+**Prerequisites:**
+- [Termux](https://f-droid.org/packages/com.termux/) - Install from F-Droid (not Google Play)
+- Stable internet connection for package installation
+- At least 2GB free storage space
+
+**Installation Steps:**
+
+```bash
+# 1. Update Termux packages
+pkg update && pkg upgrade
+
+# 2. Clone the repository
+git clone https://github.com/chriswritescode-dev/opencode-manager.git
+cd opencode-manager
+
+# 3. Run automated setup (installs Node.js, pnpm, OpenCode, and dependencies)
+bash scripts/setup-termux.sh
+
+# 4. Start the application
+pnpm dev:termux
+```
+
+**Access the Application:**
+- **Local device**: Open browser to `http://127.0.0.1:5173`
+- **From other devices**: Use your device's IP address (configure `HOST=0.0.0.0` in `.env`)
+
+**Termux-Specific Features:**
+- ✅ Optimized for mobile performance with reduced timeouts
+- ✅ Uses Node.js instead of Bun for better ARM compatibility
+- ✅ Smaller file size limits (20MB) for mobile storage
+- ✅ Local-only access by default for security
+- ✅ Full Git integration for repository management
+- ✅ Complete OpenCode AI agent support
+
+**Troubleshooting:**
+
+<details>
+<summary>Storage Access Issues</summary>
+
+Grant Termux storage permissions:
+```bash
+termux-setup-storage
+```
+</details>
+
+<details>
+<summary>Port Already in Use</summary>
+
+If ports 5001 or 5173 are in use, edit `.env` to change:
+```bash
+PORT=5002
+# Restart the application
+```
+</details>
+
+<details>
+<summary>Node.js Module Errors</summary>
+
+Clear cache and reinstall:
+```bash
+rm -rf node_modules */node_modules
+pnpm install
+```
+</details>
+
+<details>
+<summary>OpenCode Installation Failed</summary>
+
+Manually install OpenCode:
+```bash
+npm install -g @opencode/tui
+# Verify installation
+opencode --version
+```
+</details>
+
+**Performance Tips:**
+- Close other apps to free up RAM
+- Use Wi-Fi for better stability during package installation
+- Consider using Termux:Widget for quick app startup
+- Enable "Acquire wakelock" in Termux settings to prevent sleep interruptions
 
 ## OAuth Provider Setup
 

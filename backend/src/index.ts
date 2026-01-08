@@ -41,7 +41,7 @@ app.use('/*', cors({
   allowHeaders: ['Content-Type', 'Authorization'],
 }))
 
-const db = initializeDatabase(DB_PATH)
+const db = await initializeDatabase(DB_PATH)
 
 export const DEFAULT_AGENTS_MD = `# OpenCode Manager - Global Agent Instructions
 
