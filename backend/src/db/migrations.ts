@@ -1,4 +1,4 @@
-import { Database } from 'bun:sqlite'
+import type { Database } from './database-adapter'
 import { logger } from '../utils/logger'
 
 interface ColumnInfo {

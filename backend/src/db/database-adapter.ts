@@ -2,6 +2,12 @@ type SqliteDatabase = {
   run(sql: string, ...params: unknown[]): { changes: number; lastInsertRowid: number }
   get(sql: string, ...params: unknown[]): unknown
   all(sql: string, ...params: unknown[]): unknown[]
+  exec(sql: string): void
+  query(sql: string): {
+    run(...params: unknown[]): { changes: number; lastInsertRowid: number }
+    get(...params: unknown[]): unknown
+    all(...params: unknown[]): unknown[]
+  }
   prepare(sql: string): {
     run(...params: unknown[]): { changes: number; lastInsertRowid: number }
     get(...params: unknown[]): unknown
@@ -36,6 +42,23 @@ export async function createDatabase(dbPath: string): Promise<Database> {
       all: (sql: string, ...params: unknown[]) => {
         const stmt = db.prepare(sql)
         return stmt.all(...params)
+      },
+      exec: (sql: string) => {
+        db.exec(sql)
+      },
+      query: (sql: string) => {
+        const stmt = db.prepare(sql)
+        return {
+          run: (...params: unknown[]) => {
+            const result = stmt.run(...params)
+            return {
+              changes: result.changes,
+              lastInsertRowid: Number(result.lastInsertRowid),
+            }
+          },
+          get: (...params: unknown[]) => stmt.get(...params),
+          all: (...params: unknown[]) => stmt.all(...params),
+        }
       },
       prepare: (sql: string) => {
         const stmt = db.prepare(sql)
