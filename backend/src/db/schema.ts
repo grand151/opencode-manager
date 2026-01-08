@@ -1,12 +1,12 @@
-import { Database } from 'bun:sqlite'
+import { createDatabase, type Database } from './database-adapter'
 import { logger } from '../utils/logger'
 import { mkdirSync } from 'fs'
 import { dirname } from 'path'
 import { runMigrations } from './migrations'
 
-export function initializeDatabase(dbPath: string = './data/opencode.db'): Database {
+export async function initializeDatabase(dbPath: string = './data/opencode.db'): Promise<Database> {
   mkdirSync(dirname(dbPath), { recursive: true })
-  const db = new Database(dbPath)
+  const db = await createDatabase(dbPath)
   
   db.run(`
     CREATE TABLE IF NOT EXISTS repos (
