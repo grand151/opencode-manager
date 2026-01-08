@@ -3,6 +3,7 @@
 Mobile-first web interface for OpenCode AI agents. Manage, control, and code with OpenCode from any device - your phone, tablet, or desktop. Features Git integration, file management, and real-time chat in a responsive PWA. Deploy with Docker for instant setup. View diffs, edit files and much more.
 
 **📱 Now supports Termux!** Run the full stack on your Android device. See [TERMUX.md](./TERMUX.md) for installation guide.  
+**🚀 Production ready!** Deploy to VPS with Easypanel - see [DEPLOYMENT.md](./DEPLOYMENT.md) ([Polish version](./DEPLOYMENT.pl.md))
 
 ## Features
 

@@ -2,6 +2,16 @@
 
 This guide covers deployment options for OpenCode Manager on production environments.
 
+**🌍 Available in:** [English](#) | [Polski (Polish)](./DEPLOYMENT.pl.md)
+
+## Quick Start
+
+| Deployment Method | Difficulty | Time | Best For |
+|-------------------|------------|------|----------|
+| [Easypanel](#easypanel-deployment-recommended) | ⭐ Easy | 10 min | Production, VPS |
+| [Docker Compose](#docker-compose-on-vps) | ⭐⭐ Medium | 15 min | Custom setups |
+| [Local Docker](#docker-compose-on-vps) | ⭐ Easy | 5 min | Testing, dev |
+
 ## Table of Contents
 
 - [Easypanel Deployment (Recommended)](#easypanel-deployment-recommended)
