@@ -1,6 +1,8 @@
 # OpenCode Manager
 
-Mobile-first web interface for OpenCode AI agents. Manage, control, and code with OpenCode from any device - your phone, tablet, or desktop. Features Git integration, file management, and real-time chat in a responsive PWA. Deploy with Docker for instant setup. View diffs, edit files and much more.  
+Mobile-first web interface for OpenCode AI agents. Manage, control, and code with OpenCode from any device - your phone, tablet, or desktop. Features Git integration, file management, and real-time chat in a responsive PWA. Deploy with Docker for instant setup. View diffs, edit files and much more.
+
+**📱 Now supports Termux!** Run the full stack on your Android device. See [TERMUX.md](./TERMUX.md) for installation guide.  
 
 ## Features
 
@@ -105,6 +107,12 @@ Mobile-first web interface for OpenCode AI agents. Manage, control, and code wit
 -  **Authentication** - User authentication and session management
 
 ## Installation
+
+Choose the installation method that works best for you:
+
+1. **[Docker](#option-1-docker-recommended-for-production)** - Easiest setup, works anywhere
+2. **[Local Development](#option-2-local-development-contributors)** - For contributors
+3. **[Termux (Android)](#option-3-termux-android-mobile)** - Run on your phone ([Full Guide](./TERMUX.md))
 
 ### Option 1: Docker (Recommended for Production)
 
