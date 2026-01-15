@@ -31,6 +31,7 @@ import {
   ENV
 } from '@opencode-manager/shared/config/env'
 import { OpenCodeConfigSchema } from '@opencode-manager/shared/schemas'
+import stripJsonComments from 'strip-json-comments'
 
 const { PORT, HOST } = ENV.SERVER
 const DB_PATH = getDatabasePath()
@@ -104,89 +105,91 @@ Prefer **pnpm** or **bun** over npm for installing dependencies to save disk spa
 
 async function ensureDefaultConfigExists(): Promise<void> {
   const settingsService = new SettingsService(db)
-  const existingDbConfigs = settingsService.getOpenCodeConfigs()
+  const workspaceConfigPath = getOpenCodeConfigFilePath()
   
-  // Config already exists in database - nothing to do
+  if (await fileExists(workspaceConfigPath)) {
+    logger.info(`Found workspace config at ${workspaceConfigPath}, syncing to database...`)
+    try {
+      const rawContent = await readFileContent(workspaceConfigPath)
+      const parsed = JSON.parse(stripJsonComments(rawContent))
+      const validation = OpenCodeConfigSchema.safeParse(parsed)
+      
+      if (!validation.success) {
+        logger.warn('Workspace config has invalid structure', validation.error)
+      } else {
+        const existingDefault = settingsService.getOpenCodeConfigByName('default')
+        if (existingDefault) {
+          settingsService.updateOpenCodeConfig('default', {
+            content: rawContent,
+            isDefault: true,
+          })
+          logger.info('Updated database config from workspace file')
+        } else {
+          settingsService.createOpenCodeConfig({
+            name: 'default',
+            content: rawContent,
+            isDefault: true,
+          })
+          logger.info('Created database config from workspace file')
+        }
+        return
+      }
+    } catch (error) {
+      logger.warn('Failed to read workspace config', error)
+    }
+  }
+  
+  const homeConfigPath = path.join(os.homedir(), '.config/opencode/opencode.json')
+  if (await fileExists(homeConfigPath)) {
+    logger.info(`Found home config at ${homeConfigPath}, importing...`)
+    try {
+      const rawContent = await readFileContent(homeConfigPath)
+      const parsed = JSON.parse(stripJsonComments(rawContent))
+      const validation = OpenCodeConfigSchema.safeParse(parsed)
+      
+      if (validation.success) {
+        const existingDefault = settingsService.getOpenCodeConfigByName('default')
+        if (existingDefault) {
+          settingsService.updateOpenCodeConfig('default', {
+            content: rawContent,
+            isDefault: true,
+          })
+        } else {
+          settingsService.createOpenCodeConfig({
+            name: 'default',
+            content: rawContent,
+            isDefault: true,
+          })
+        }
+        
+        await writeFileContent(workspaceConfigPath, rawContent)
+        logger.info('Imported home config to workspace')
+        return
+      }
+    } catch (error) {
+      logger.warn('Failed to import home config', error)
+    }
+  }
+  
+  const existingDbConfigs = settingsService.getOpenCodeConfigs()
   if (existingDbConfigs.configs.length > 0) {
-    logger.info('OpenCode config already exists in database')
+    const defaultConfig = settingsService.getDefaultOpenCodeConfig()
+    if (defaultConfig) {
+      await writeFileContent(workspaceConfigPath, defaultConfig.rawContent)
+      logger.info('Wrote existing database config to workspace file')
+    }
     return
   }
   
-  // Try to import from existing OpenCode installation (highest priority)
-  const homeConfigPath = path.join(os.homedir(), '.config/opencode/opencode.json')
-  if (await fileExists(homeConfigPath)) {
-    logger.info(`Found existing OpenCode config at ${homeConfigPath}, importing...`)
-    try {
-      const content = await readFileContent(homeConfigPath)
-      const parsed = JSON.parse(content)
-      const validation = OpenCodeConfigSchema.safeParse(parsed)
-      
-      if (!validation.success) {
-        logger.warn('Existing config has invalid structure, will try other sources', validation.error)
-      } else {
-        settingsService.createOpenCodeConfig({
-          name: 'default',
-          content: validation.data,
-          isDefault: true,
-        })
-        logger.info('Successfully imported existing OpenCode config')
-        return
-      }
-    } catch (error) {
-      logger.warn('Failed to import existing config, will try other sources', error)
-    }
-  }
-  
-  // Try to import from workspace config (if user reinstalls and workspace persists)
-  const workspaceConfigPath = getOpenCodeConfigFilePath()
-  if (await fileExists(workspaceConfigPath)) {
-    logger.info(`Found workspace config, importing...`)
-    try {
-      const content = await readFileContent(workspaceConfigPath)
-      const parsed = JSON.parse(content)
-      const validation = OpenCodeConfigSchema.safeParse(parsed)
-      
-      if (!validation.success) {
-        logger.warn('Workspace config has invalid structure, will use defaults', validation.error)
-      } else {
-        settingsService.createOpenCodeConfig({
-          name: 'default',
-          content: validation.data,
-          isDefault: true,
-        })
-        logger.info('Successfully imported workspace config')
-        return
-      }
-    } catch (error) {
-      logger.warn('Failed to import workspace config, will use defaults', error)
-    }
-  }
-  
-  // No existing config found - create minimal seed config
-  logger.info('No existing OpenCode config found, creating minimal seed config')
+  logger.info('No existing config found, creating minimal seed config')
+  const seedConfig = JSON.stringify({ $schema: 'https://opencode.ai/config.json' }, null, 2)
   settingsService.createOpenCodeConfig({
     name: 'default',
-    content: {
-      $schema: 'https://opencode.ai/config.json',
-      // Minimal seed - users can configure through Manager UI
-    },
+    content: seedConfig,
     isDefault: true,
   })
-  logger.info('Created minimal seed OpenCode config')
-}
-
-async function syncDefaultConfigToDisk(): Promise<void> {
-  const settingsService = new SettingsService(db)
-  const defaultConfig = settingsService.getDefaultOpenCodeConfig()
-  
-  if (defaultConfig) {
-    const configPath = getOpenCodeConfigFilePath()
-    const configContent = JSON.stringify(defaultConfig.content, null, 2)
-    await writeFileContent(configPath, configContent)
-    logger.info(`Synced default config '${defaultConfig.name}' to: ${configPath}`)
-  } else {
-    logger.info('No default OpenCode config found in database')
-  }
+  await writeFileContent(workspaceConfigPath, seedConfig)
+  logger.info('Created minimal seed config')
 }
 
 async function ensureDefaultAgentsMdExists(): Promise<void> {
@@ -211,7 +214,6 @@ try {
   await cleanupExpiredCache()
 
   await ensureDefaultConfigExists()
-  await syncDefaultConfigToDisk()
   await ensureDefaultAgentsMdExists()
 
   const settingsService = new SettingsService(db)
