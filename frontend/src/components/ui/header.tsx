@@ -61,7 +61,7 @@ function HeaderTitle({ children, logo, className }: HeaderTitleProps) {
 interface HeaderEditableTitleProps {
   value: string;
   onChange: (value: string) => void;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   generating?: boolean;
   className?: string;
 }
@@ -158,7 +158,7 @@ function HeaderEditableTitle({ value, onChange, subtitle, generating, className 
           )}
           {subtitle && (
             <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
-              {subtitle}
+              {typeof subtitle === 'string' ? subtitle : subtitle}
             </p>
           )}
         </div>

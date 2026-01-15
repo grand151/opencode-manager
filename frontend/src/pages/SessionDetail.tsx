@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getRepo } from "@/api/repos";
 import { MessageThread } from "@/components/message/MessageThread";
 import { PromptInput, type PromptInputHandle } from "@/components/message/PromptInput";
-import { X, VolumeX, FolderOpen, Plug, Settings, Upload, CornerUpLeft } from "lucide-react";
+import { X, VolumeX, FolderOpen, Plug, Settings, CornerUpLeft } from "lucide-react";
 import { ModelSelectDialog } from "@/components/model/ModelSelectDialog";
 import { Header } from "@/components/ui/header";
 import { SessionList } from "@/components/session/SessionList";
@@ -283,9 +283,7 @@ export function SessionDetail() {
     promptInputRef.current?.clearPrompt()
   }, []);
 
-  const handleAttachFile = useCallback(() => {
-    promptInputRef.current?.triggerFileUpload()
-  }, []);
+  
 
   
 
@@ -338,7 +336,7 @@ export function SessionDetail() {
           <Header.EditableTitle
             value={session?.title || "Untitled Session"}
             onChange={handleSessionTitleUpdate}
-            subtitle={repo.repoUrl?.split("/").pop()?.replace(".git", "") || repo.localPath || "Repository"}
+            subtitle={<span className="text-orange-600 dark:text-orange-400">{repo.repoUrl?.split("/").pop()?.replace(".git", "") || repo.localPath || "Repository"}</span>}
             generating={isTitleGenerating}
           />
         </div>
@@ -362,63 +360,61 @@ export function SessionDetail() {
             className="hidden sm:flex max-w-[80px] sm:w-[140px] sm:max-w-[140px]"
           />
           <Button
-            variant="ghost"
-            size="icon"
+            variant="outline"
+            size="sm"
             onClick={() => setFileBrowserOpen(true)}
-            className="hidden sm:flex text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-200 h-8 w-8"
-            title="Files"
+            className="hidden md:flex text-foreground border-border hover:bg-accent transition-all duration-200 hover:scale-105"
           >
-            <FolderOpen className="w-4 h-4" />
+            <FolderOpen className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Files</span>
           </Button>
           <Button
-            variant="ghost"
-            size="icon"
+            variant="outline"
+            size="sm"
             onClick={() => setMcpDialogOpen(true)}
-            className="hidden sm:flex text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-200 h-8 w-8"
-            title="MCP Servers"
+            className="hidden md:flex text-foreground border-border hover:bg-accent transition-all duration-200 hover:scale-105"
           >
-            <Plug className="w-4 h-4" />
+            <Plug className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">MCP</span>
           </Button>
           <Button
-            variant="ghost"
-            size="icon"
+            variant="outline"
+            size="sm"
             onClick={openSettings}
-            className="hidden sm:flex text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-200 h-8 w-8"
-            title="Settings"
+            className="hidden md:flex text-foreground border-border hover:bg-accent transition-all duration-200 hover:scale-105"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Settings</span>
           </Button>
           <Header.MobileDropdown>
-            <div className="px-2 py-1.5">
-              <BranchSwitcher
-                repoId={repoId}
-                currentBranch={repo.currentBranch || "main"}
-                isWorktree={repo.isWorktree}
-                repoUrl={repo.repoUrl}
-                repoLocalPath={repo.localPath}
-                iconOnly={false}
-                className="w-full"
-              />
-            </div>
-            <div className="h-px bg-border my-1" />
-            <DropdownMenuItem onClick={() => setFileBrowserOpen(true)}>
-              <FolderOpen className="w-4 h-4 mr-2" /> Files
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleAttachFile}>
-              <Upload className="w-4 h-4 mr-2" /> Upload
-            </DropdownMenuItem>
+            {!(repo.isWorktree) && (repo.currentBranch || repo.branch) && (
+              <>
+                <div className="px-2 py-1.5">
+                  <BranchSwitcher
+                    repoId={repoId}
+                    currentBranch={repo.currentBranch || repo.branch || "main"}
+                    isWorktree={repo.isWorktree}
+                    repoUrl={repo.repoUrl}
+                    repoLocalPath={repo.localPath}
+                    iconOnly={false}
+                    className="w-full"
+                  />
+                </div>
+                <div className="h-px bg-border my-1" />
+              </>
+            )}
             <DropdownMenuItem onClick={() => setMcpDialogOpen(true)}>
               <Plug className="w-4 h-4 mr-2" /> MCP
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={openSettings}>
-              <Settings className="w-4 h-4 mr-2" /> Settings
+            <DropdownMenuItem onClick={() => setFileBrowserOpen(true)}>
+              <FolderOpen className="w-4 h-4 mr-2" /> Files
             </DropdownMenuItem>
           </Header.MobileDropdown>
         </Header.Actions>
       </Header>
 
       <div className="flex-1 overflow-hidden flex flex-col relative">
-        <div key={sessionId} ref={messageContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden pb-28 overscroll-contain">
+        <div key={sessionId} ref={messageContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden pb-28 overscroll-contain [mask-image:linear-gradient(to_bottom,transparent,black_16px,black)]">
           {repoLoading || sessionLoading || messagesLoading ? (
             <MessageSkeleton />
           ) : opcodeUrl && repoDirectory ? (
