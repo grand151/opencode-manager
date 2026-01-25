@@ -44,7 +44,12 @@ const DB_PATH = getDatabasePath()
 const app = new Hono()
 
 app.use('/*', cors({
-  origin: (origin) => origin || '*',
+  origin: (origin) => {
+    const trustedOrigins = ENV.AUTH.TRUSTED_ORIGINS.split(',').map(o => o.trim())
+    if (!origin) return trustedOrigins[0]
+    if (trustedOrigins.includes(origin)) return origin
+    return trustedOrigins[0]
+  },
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
