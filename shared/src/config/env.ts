@@ -61,6 +61,9 @@ export const ENV = {
 
   DATABASE: {
     PATH: getEnvString('DATABASE_PATH', DEFAULTS.DATABASE.PATH),
+    URL: getEnvString('DATABASE_URL', ''),
+    SUPABASE_URL: getEnvString('SUPABASE_URL', ''),
+    SUPABASE_ANON_KEY: getEnvString('SUPABASE_ANON_KEY', ''),
   },
 
   WORKSPACE: {
@@ -114,6 +117,11 @@ export const getOpenCodeConfigFilePath = () => path.join(ENV.WORKSPACE.BASE_PATH
 export const getAgentsMdPath = () => path.join(ENV.WORKSPACE.BASE_PATH, ENV.WORKSPACE.CONFIG_DIR, 'AGENTS.md')
 export const getAuthPath = () => path.join(ENV.WORKSPACE.BASE_PATH, ENV.WORKSPACE.AUTH_FILE)
 export const getDatabasePath = () => ENV.DATABASE.PATH
+export const getDatabaseUrl = () => ENV.DATABASE.URL
+export const getSupabaseConfig = () => ({
+  url: ENV.DATABASE.SUPABASE_URL,
+  anonKey: ENV.DATABASE.SUPABASE_ANON_KEY
+})
 
 export const getApiUrl = (port: number = ENV.SERVER.PORT): string => {
   const host = ENV.SERVER.HOST

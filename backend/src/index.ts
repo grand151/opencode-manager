@@ -5,6 +5,7 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import os from 'os'
 import path from 'path'
 import { initializeDatabase } from './db/schema'
+import { createPostgreSQLClient } from './db/postgresql-client'
 import { createRepoRoutes } from './routes/repos'
 import { createIPCServer, type IPCServer } from './ipc/ipcServer'
 import { GitAuthService } from './services/git-auth'
@@ -33,13 +34,14 @@ import {
   getOpenCodeConfigFilePath,
   getAgentsMdPath,
   getDatabasePath,
+  getDatabaseUrl,
   ENV
 } from '@opencode-manager/shared/config/env'
 import { OpenCodeConfigSchema } from '@opencode-manager/shared/schemas'
 import stripJsonComments from 'strip-json-comments'
 
 const { PORT, HOST } = ENV.SERVER
-const DB_PATH = getDatabasePath()
+const DB_URL = getDatabaseUrl()
 
 const app = new Hono()
 
@@ -55,7 +57,16 @@ app.use('/*', cors({
   credentials: true,
 }))
 
-const db = initializeDatabase(DB_PATH)
+let db: ReturnType<typeof createPostgreSQLClient>
+
+if (DB_URL) {
+  db = createPostgreSQLClient(DB_URL)
+} else {
+  throw new Error('DATABASE_URL is required for PostgreSQL connection')
+}
+
+await initializeDatabase(db)
+
 const auth = createAuth(db)
 const requireAuth = createAuthMiddleware(auth)
 

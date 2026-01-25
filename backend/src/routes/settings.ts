@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { execSync } from 'child_process'
-import type { Database } from 'bun:sqlite'
+import type { DBClient } from '../db/client'
 import { SettingsService } from '../services/settings'
 import { writeFileContent, readFileContent, fileExists } from '../services/file-operations'
 import { patchOpenCodeConfig, proxyToOpenCodeWithDirectory } from '../services/proxy'
@@ -69,14 +69,14 @@ async function extractOpenCodeError(response: Response, defaultError: string): P
     : defaultError
 }
 
-export function createSettingsRoutes(db: Database) {
+export function createSettingsRoutes(db: DBClient) {
   const app = new Hono()
   const settingsService = new SettingsService(db)
 
   app.get('/', async (c) => {
     try {
       const userId = c.req.query('userId') || 'default'
-      const settings = settingsService.getSettings(userId)
+      const settings = await settingsService.getSettings(userId)
       return c.json(settings)
     } catch (error) {
       logger.error('Failed to get settings:', error)
@@ -90,8 +90,8 @@ export function createSettingsRoutes(db: Database) {
       const body = await c.req.json()
       const validated = UpdateSettingsSchema.parse(body)
       
-      const currentSettings = settingsService.getSettings(userId)
-      const settings = settingsService.updateSettings(validated.preferences, userId)
+      const currentSettings = await settingsService.getSettings(userId)
+      const settings = await settingsService.updateSettings(validated.preferences, userId)
       
       let serverRestarted = false
       
@@ -139,7 +139,7 @@ export function createSettingsRoutes(db: Database) {
   app.get('/opencode-configs', async (c) => {
     try {
       const userId = c.req.query('userId') || 'default'
-      const configs = settingsService.getOpenCodeConfigs(userId)
+      const configs = await settingsService.getOpenCodeConfigs(userId)
       return c.json(configs)
     } catch (error) {
       logger.error('Failed to get OpenCode configs:', error)
@@ -153,7 +153,7 @@ export function createSettingsRoutes(db: Database) {
       const body = await c.req.json()
       const validated = CreateOpenCodeConfigSchema.parse(body)
       
-      const config = settingsService.createOpenCodeConfig(validated, userId)
+      const config = await settingsService.createOpenCodeConfig(validated, userId)
       
       if (config.isDefault) {
         const configPath = getOpenCodeConfigFilePath()
@@ -186,10 +186,10 @@ export function createSettingsRoutes(db: Database) {
       const body = await c.req.json()
       const validated = UpdateOpenCodeConfigSchema.parse(body)
       
-      const existingConfig = settingsService.getOpenCodeConfigByName(configName, userId)
+      const existingConfig = await settingsService.getOpenCodeConfigByName(configName, userId)
       const existingAgents = existingConfig?.content?.agent
       
-      const config = settingsService.updateOpenCodeConfig(configName, validated, userId)
+      const config = await settingsService.updateOpenCodeConfig(configName, validated, userId)
       if (!config) {
         return c.json({ error: 'Config not found' }, 404)
       }
@@ -271,7 +271,7 @@ export function createSettingsRoutes(db: Database) {
   app.get('/opencode-configs/default', async (c) => {
     try {
       const userId = c.req.query('userId') || 'default'
-      const config = settingsService.getDefaultOpenCodeConfig(userId)
+      const config = await settingsService.getDefaultOpenCodeConfig(userId)
       
       if (!config) {
         return c.json({ error: 'No default config found' }, 404)
@@ -322,13 +322,13 @@ export function createSettingsRoutes(db: Database) {
       const userId = c.req.query('userId') || 'default'
       logger.info('OpenCode config rollback requested')
 
-      const rollbackConfig = settingsService.rollbackToLastKnownGoodHealth(userId)
+      const rollbackConfig = await settingsService.rollbackToLastKnownGoodHealth(userId)
       if (!rollbackConfig) {
         return c.json({ error: 'No previous working config available for rollback' }, 404)
       }
 
       const configPath = getOpenCodeConfigFilePath()
-      const config = settingsService.getDefaultOpenCodeConfig(userId)
+      const config = await settingsService.getDefaultOpenCodeConfig(userId)
       if (!config) {
         return c.json({ error: 'Failed to get default config after rollback' }, 500)
       }
@@ -522,7 +522,7 @@ export function createSettingsRoutes(db: Database) {
   app.get('/custom-commands', async (c) => {
     try {
       const userId = c.req.query('userId') || 'default'
-      const settings = settingsService.getSettings(userId)
+      const settings = await settingsService.getSettings(userId)
       return c.json(settings.preferences.customCommands)
     } catch (error) {
       logger.error('Failed to get custom commands:', error)
@@ -536,13 +536,13 @@ export function createSettingsRoutes(db: Database) {
       const body = await c.req.json()
       const validated = CreateCustomCommandSchema.parse(body)
       
-      const settings = settingsService.getSettings(userId)
+      const settings = await settingsService.getSettings(userId)
       const existingCommand = settings.preferences.customCommands.find(cmd => cmd.name === validated.name)
       if (existingCommand) {
         return c.json({ error: 'Command with this name already exists' }, 409)
       }
       
-      settingsService.updateSettings({
+      await settingsService.updateSettings({
         customCommands: [...settings.preferences.customCommands, validated]
       }, userId)
       
@@ -563,7 +563,7 @@ export function createSettingsRoutes(db: Database) {
       const body = await c.req.json()
       const validated = UpdateCustomCommandSchema.parse(body)
       
-      const settings = settingsService.getSettings(userId)
+      const settings = await settingsService.getSettings(userId)
       const commandIndex = settings.preferences.customCommands.findIndex(cmd => cmd.name === commandName)
       if (commandIndex === -1) {
         return c.json({ error: 'Command not found' }, 404)
@@ -576,7 +576,7 @@ export function createSettingsRoutes(db: Database) {
         promptTemplate: validated.promptTemplate
       }
       
-      settingsService.updateSettings({
+      await settingsService.updateSettings({
         customCommands: updatedCommands
       }, userId)
       
@@ -595,14 +595,14 @@ export function createSettingsRoutes(db: Database) {
       const userId = c.req.query('userId') || 'default'
       const commandName = decodeURIComponent(c.req.param('name'))
       
-      const settings = settingsService.getSettings(userId)
+      const settings = await settingsService.getSettings(userId)
       const commandExists = settings.preferences.customCommands.some(cmd => cmd.name === commandName)
       if (!commandExists) {
         return c.json({ error: 'Command not found' }, 404)
       }
       
       const updatedCommands = settings.preferences.customCommands.filter(cmd => cmd.name !== commandName)
-      settingsService.updateSettings({
+      await settingsService.updateSettings({
         customCommands: updatedCommands
       }, userId)
       

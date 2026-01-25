@@ -1,20 +1,23 @@
-import type { Database } from 'bun:sqlite'
+import type { DBClient } from './client'
 import { logger } from '../utils/logger'
 
 
 
 export async function withTransactionAsync<T>(
-  db: Database,
-  fn: (db: Database) => Promise<T>
+  db: DBClient,
+  fn: (db: DBClient) => Promise<T>
 ): Promise<T> {
+  const client = await (db as any).pool.connect()
   try {
-    db.exec('BEGIN TRANSACTION')
+    await client.query('BEGIN')
     const result = await fn(db)
-    db.exec('COMMIT')
+    await client.query('COMMIT')
     return result
   } catch (error) {
-    db.exec('ROLLBACK')
+    await client.query('ROLLBACK')
     logger.error('Transaction rolled back:', error)
     throw error
+  } finally {
+    client.release()
   }
 }

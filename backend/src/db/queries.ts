@@ -1,22 +1,9 @@
-import type { Database } from 'bun:sqlite'
+import type { DBClient } from './client'
 import type { Repo, CreateRepoInput } from '../types/repo'
+import type { RepoRow } from './client'
 import { getReposPath } from '@opencode-manager/shared/config/env'
 import { getErrorMessage } from '../utils/error-utils'
 import path from 'path'
-
-export interface RepoRow {
-  id: number
-  repo_url?: string
-  local_path: string
-  branch?: string
-  default_branch: string
-  clone_status: string
-  cloned_at: number
-  last_pulled?: number
-  opencode_config_name?: string
-  is_worktree?: number
-  is_local?: number
-}
 
 function rowToRepo(row: RepoRow): Repo {
   return {
@@ -35,24 +22,24 @@ function rowToRepo(row: RepoRow): Repo {
   }
 }
 
-export function createRepo(db: Database, repo: CreateRepoInput): Repo {
+export async function createRepo(db: DBClient, repo: CreateRepoInput): Promise<Repo> {
   const normalizedPath = repo.localPath.trim().replace(/\/+$/, '')
   
   const existing = repo.isLocal 
-    ? getRepoByLocalPath(db, normalizedPath)
-    : getRepoByUrlAndBranch(db, repo.repoUrl!, repo.branch)
+    ? await getRepoByLocalPath(db, normalizedPath)
+    : await getRepoByUrlAndBranch(db, repo.repoUrl!, repo.branch)
   
   if (existing) {
     return existing
   }
   
-  const stmt = db.prepare(`
+  const sql = `
     INSERT INTO repos (repo_url, local_path, branch, default_branch, clone_status, cloned_at, is_worktree, is_local)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id
+  `
   
   try {
-    const result = stmt.run(
+    const result = await db.run(sql, [
       repo.repoUrl || null,
       normalizedPath,
       repo.branch || null,
@@ -61,9 +48,9 @@ export function createRepo(db: Database, repo: CreateRepoInput): Repo {
       repo.clonedAt,
       repo.isWorktree ? 1 : 0,
       repo.isLocal ? 1 : 0
-    )
+    ])
     
-    const newRepo = getRepoById(db, Number(result.lastInsertRowid))
+    const newRepo = await getRepoById(db, Number(result.lastInsertRowid))
     if (!newRepo) {
       throw new Error(`Failed to retrieve newly created repo with id ${result.lastInsertRowid}`)
     }
@@ -72,8 +59,8 @@ export function createRepo(db: Database, repo: CreateRepoInput): Repo {
     const errorMessage = getErrorMessage(error)
     if (errorMessage.includes('UNIQUE constraint failed') || (error && typeof error === 'object' && 'code' in error && error.code === 'SQLITE_CONSTRAINT_UNIQUE')) {
       const conflictRepo = repo.isLocal 
-        ? getRepoByLocalPath(db, normalizedPath)
-        : getRepoByUrlAndBranch(db, repo.repoUrl!, repo.branch)
+        ? await getRepoByLocalPath(db, normalizedPath)
+        : await getRepoByUrlAndBranch(db, repo.repoUrl!, repo.branch)
       
       if (conflictRepo) {
         return conflictRepo
@@ -87,43 +74,38 @@ export function createRepo(db: Database, repo: CreateRepoInput): Repo {
   }
 }
 
-export function getRepoById(db: Database, id: number): Repo | null {
-  const stmt = db.prepare('SELECT * FROM repos WHERE id = ?')
-  const row = stmt.get(id) as RepoRow | undefined
+export async function getRepoById(db: DBClient, id: number): Promise<Repo | null> {
+  const row = await db.get('SELECT * FROM repos WHERE id = $1', [id]) as RepoRow | undefined
   
   return row ? rowToRepo(row) : null
 }
 
-export function getRepoByUrl(db: Database, repoUrl: string): Repo | null {
-  const stmt = db.prepare('SELECT * FROM repos WHERE repo_url = ?')
-  const row = stmt.get(repoUrl) as RepoRow | undefined
+export async function getRepoByUrl(db: DBClient, repoUrl: string): Promise<Repo | null> {
+  const row = await db.get('SELECT * FROM repos WHERE repo_url = $1', [repoUrl]) as RepoRow | undefined
   
   return row ? rowToRepo(row) : null
 }
 
-export function getRepoByUrlAndBranch(db: Database, repoUrl: string, branch?: string): Repo | null {
+export async function getRepoByUrlAndBranch(db: DBClient, repoUrl: string, branch?: string): Promise<Repo | null> {
   const query = branch 
-    ? 'SELECT * FROM repos WHERE repo_url = ? AND branch = ?'
-    : 'SELECT * FROM repos WHERE repo_url = ? AND branch IS NULL'
+    ? 'SELECT * FROM repos WHERE repo_url = $1 AND branch = $2'
+    : 'SELECT * FROM repos WHERE repo_url = $1 AND branch IS NULL'
   
-  const stmt = db.prepare(query)
   const row = branch 
-    ? stmt.get(repoUrl, branch) as RepoRow | undefined
-    : stmt.get(repoUrl) as RepoRow | undefined
+    ? await db.get(query, [repoUrl, branch]) as RepoRow | undefined
+    : await db.get(query, [repoUrl]) as RepoRow | undefined
   
   return row ? rowToRepo(row) : null
 }
 
-export function getRepoByLocalPath(db: Database, localPath: string): Repo | null {
-  const stmt = db.prepare('SELECT * FROM repos WHERE local_path = ?')
-  const row = stmt.get(localPath) as RepoRow | undefined
+export async function getRepoByLocalPath(db: DBClient, localPath: string): Promise<Repo | null> {
+  const row = await db.get('SELECT * FROM repos WHERE local_path = $1', [localPath]) as RepoRow | undefined
   
   return row ? rowToRepo(row) : null
 }
 
-export function listRepos(db: Database, repoOrder?: number[]): Repo[] {
-  const stmt = db.prepare('SELECT * FROM repos ORDER BY cloned_at DESC')
-  const rows = stmt.all() as RepoRow[]
+export async function listRepos(db: DBClient, repoOrder?: number[]): Promise<Repo[]> {
+  const rows = await db.query('SELECT * FROM repos ORDER BY cloned_at DESC') as RepoRow[]
   const repos = rows.map(rowToRepo)
 
   if (!repoOrder || repoOrder.length === 0) {
@@ -156,27 +138,22 @@ function getRepoName(repo: Repo): string {
     : repo.localPath
 }
 
-export function updateRepoStatus(db: Database, id: number, cloneStatus: Repo['cloneStatus']): void {
-  const stmt = db.prepare('UPDATE repos SET clone_status = ? WHERE id = ?')
-  stmt.run(cloneStatus, id)
+export async function updateRepoStatus(db: DBClient, id: number, cloneStatus: Repo['cloneStatus']): Promise<void> {
+  await db.run('UPDATE repos SET clone_status = $1 WHERE id = $2', [cloneStatus, id])
 }
 
-export function updateRepoConfigName(db: Database, id: number, configName: string): void {
-  const stmt = db.prepare('UPDATE repos SET opencode_config_name = ? WHERE id = ?')
-  stmt.run(configName, id)
+export async function updateRepoConfigName(db: DBClient, id: number, configName: string): Promise<void> {
+  await db.run('UPDATE repos SET opencode_config_name = $1 WHERE id = $2', [configName, id])
 }
 
-export function updateLastPulled(db: Database, id: number): void {
-  const stmt = db.prepare('UPDATE repos SET last_pulled = ? WHERE id = ?')
-  stmt.run(Date.now(), id)
+export async function updateLastPulled(db: DBClient, id: number): Promise<void> {
+  await db.run('UPDATE repos SET last_pulled = $1 WHERE id = $2', [Date.now(), id])
 }
 
-export function updateRepoBranch(db: Database, id: number, branch: string): void {
-  const stmt = db.prepare('UPDATE repos SET branch = ? WHERE id = ?')
-  stmt.run(branch, id)
+export async function updateRepoBranch(db: DBClient, id: number, branch: string): Promise<void> {
+  await db.run('UPDATE repos SET branch = $1 WHERE id = $2', [branch, id])
 }
 
-export function deleteRepo(db: Database, id: number): void {
-  const stmt = db.prepare('DELETE FROM repos WHERE id = ?')
-  stmt.run(id)
+export async function deleteRepo(db: DBClient, id: number): Promise<void> {
+  await db.run('DELETE FROM repos WHERE id = $1', [id])
 }

@@ -1,66 +1,59 @@
-import { Database } from 'bun:sqlite'
+import type { DBClient } from './client'
 import { logger } from '../utils/logger'
 
-interface ColumnInfo {
-  cid: number
-  name: string
-  type: string
-  notnull: number
-  dflt_value: unknown
-  pk: number
-}
 
-export function runMigrations(db: Database): void {
+
+export async function runMigrations(db: DBClient): Promise<void> {
   try {
-    const tableInfo = db.prepare("PRAGMA table_info(repos)").all() as ColumnInfo[]
+    const tableInfo = await (db as any).getTableInfo('repos')
     
-    const repoUrlColumn = tableInfo.find((col: ColumnInfo) => col.name === 'repo_url')
+    const repoUrlColumn = tableInfo.find((col: any) => col.name === 'repo_url')
     if (repoUrlColumn && repoUrlColumn.notnull === 1) {
       logger.info('Migrating repos table to allow nullable repo_url for local repos')
-      db.run('BEGIN TRANSACTION')
+      await db.exec('BEGIN')
       try {
-        db.run(`
+        await db.exec(`
           CREATE TABLE repos_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             repo_url TEXT,
             local_path TEXT NOT NULL,
             branch TEXT,
             default_branch TEXT,
             clone_status TEXT NOT NULL,
-            cloned_at INTEGER NOT NULL,
-            last_pulled INTEGER,
+            cloned_at BIGINT NOT NULL,
+            last_pulled BIGINT,
             opencode_config_name TEXT,
             is_worktree BOOLEAN DEFAULT FALSE,
             is_local BOOLEAN DEFAULT FALSE
           )
         `)
         
-        const existingColumns = tableInfo.map((col: ColumnInfo) => col.name)
+        const existingColumns = tableInfo.map((col: any) => col.name)
         const columnsToCopy = ['id', 'repo_url', 'local_path', 'branch', 'default_branch', 'clone_status', 'cloned_at', 'last_pulled', 'opencode_config_name', 'is_worktree', 'is_local']
           .filter(col => existingColumns.includes(col))
         
         const columnsStr = columnsToCopy.join(', ')
-        db.run(`INSERT INTO repos_new (${columnsStr}) SELECT ${columnsStr} FROM repos`)
+        await db.exec(`INSERT INTO repos_new (${columnsStr}) SELECT ${columnsStr} FROM repos`)
         
-        db.run('DROP TABLE repos')
-        db.run('ALTER TABLE repos_new RENAME TO repos')
-        db.run('COMMIT')
+        await db.exec('DROP TABLE repos')
+        await db.exec('ALTER TABLE repos_new RENAME TO repos')
+        await db.exec('COMMIT')
         logger.info('Successfully migrated repos table to allow nullable repo_url')
       } catch (migrationError) {
-        db.run('ROLLBACK')
+        await db.exec('ROLLBACK')
         throw migrationError
       }
     }
     
-    const hasBranchColumn = tableInfo.some(col => col.name === 'branch')
+    const hasBranchColumn = tableInfo.some((col: any) => col.name === 'branch')
     
     if (!hasBranchColumn) {
       logger.info('Adding missing branch column to repos table')
-      db.run('ALTER TABLE repos ADD COLUMN branch TEXT')
+      await db.exec('ALTER TABLE repos ADD COLUMN branch TEXT')
     }
     
     try {
-      db.run(`
+      await db.exec(`
         CREATE UNIQUE INDEX IF NOT EXISTS idx_repo_url_branch 
         ON repos(repo_url, branch) 
         WHERE branch IS NOT NULL
@@ -70,7 +63,7 @@ export function runMigrations(db: Database): void {
     }
     
     try {
-      db.run(`
+      await db.exec(`
         CREATE UNIQUE INDEX IF NOT EXISTS idx_local_path 
         ON repos(local_path)
       `)
@@ -89,11 +82,11 @@ export function runMigrations(db: Database): void {
     ]
     
     for (const column of requiredColumns) {
-      const hasColumn = tableInfo.some(col => col.name === column.name)
+      const hasColumn = tableInfo.some((col: any) => col.name === column.name)
       if (!hasColumn) {
         logger.info(`Adding missing column: ${column.name}`)
         try {
-          db.run(column.sql)
+          await db.exec(column.sql)
         } catch (error) {
           logger.debug(`Column ${column.name} might already exist:`, error)
         }
@@ -109,23 +102,22 @@ export function runMigrations(db: Database): void {
     
     for (const indexSql of indexes) {
       try {
-        db.run(indexSql)
+        await db.exec(indexSql)
       } catch (error) {
         logger.debug('Index already exists:', error)
       }
     }
     
     try {
-      const repos = db.prepare("SELECT id, local_path FROM repos WHERE local_path LIKE 'repos/%'").all() as Array<{
+      const repos = await db.query("SELECT id, local_path FROM repos WHERE local_path LIKE 'repos/%'") as Array<{
         id: number
         local_path: string
       }>
       if (repos.length > 0) {
         logger.info(`Migrating ${repos.length} repos to remove 'repos/' prefix from local_path`)
-        const updateStmt = db.prepare("UPDATE repos SET local_path = ? WHERE id = ?")
         for (const repo of repos) {
           const newPath = repo.local_path.replace(/^repos\//, '')
-          updateStmt.run(newPath, repo.id)
+          await db.run("UPDATE repos SET local_path = $1 WHERE id = $2", [newPath, repo.id])
           logger.info(`Updated repo ${repo.id}: ${repo.local_path} -> ${newPath}`)
         }
       }
@@ -133,7 +125,7 @@ export function runMigrations(db: Database): void {
       logger.error('Failed to migrate local_path format:', error)
     }
     
-    migrateGitTokenToCredentials(db)
+    await migrateGitTokenToCredentials(db)
     
     logger.info('Database migrations completed successfully')
   } catch (error) {
@@ -142,9 +134,9 @@ export function runMigrations(db: Database): void {
   }
 }
 
-function migrateGitTokenToCredentials(db: Database): void {
+async function migrateGitTokenToCredentials(db: DBClient): Promise<void> {
   try {
-    const rows = db.prepare('SELECT user_id, preferences FROM user_preferences').all() as Array<{
+    const rows = await db.query('SELECT user_id, preferences FROM user_preferences') as Array<{
       user_id: string
       preferences: string
     }>
@@ -173,8 +165,8 @@ function migrateGitTokenToCredentials(db: Database): void {
           }],
         }
 
-        db.prepare('UPDATE user_preferences SET preferences = ? WHERE user_id = ?')
-          .run(JSON.stringify(migrated), row.user_id)
+        await db.run('UPDATE user_preferences SET preferences = $1 WHERE user_id = $2', 
+          [JSON.stringify(migrated), row.user_id])
 
         logger.info(`Migrated gitToken to gitCredentials for user: ${row.user_id}`)
       } catch (parseError) {

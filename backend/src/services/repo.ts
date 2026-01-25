@@ -1,7 +1,7 @@
 import { executeCommand } from '../utils/process'
 import { ensureDirectoryExists } from './file-operations'
 import * as db from '../db/queries'
-import type { Database } from 'bun:sqlite'
+import type { DBClient } from '../db/client'
 import type { Repo, CreateRepoInput } from '../types/repo'
 import { logger } from '../utils/logger'
 import { getReposPath } from '@opencode-manager/shared/config/env'
@@ -123,32 +123,27 @@ async function checkoutBranchSafely(repoPath: string, branch: string, env: Recor
 }
 
 export async function initLocalRepo(
-  database: Database,
+  database: DBClient,
   gitAuthService: GitAuthService,
   localPath: string,
   branch?: string
 ): Promise<Repo> {
-  const normalizedInputPath = localPath.trim().replace(/\/+$/, '')
   const env = gitAuthService.getGitEnvironment()
-  
-  let targetPath: string
+  const normalizedInputPath = localPath
   let repoLocalPath: string
+  let targetPath: string
   let sourceWasGitRepo = false
   
-  if (path.isAbsolute(normalizedInputPath)) {
-    logger.info(`Absolute path detected: ${normalizedInputPath}`)
-    
+  const isAbsolutePath = path.isAbsolute(normalizedInputPath)
+  
+  if (!isAbsolutePath) {
+    repoLocalPath = normalizedInputPath.replace(/\/+$/, '')
+    targetPath = path.join(getReposPath(), repoLocalPath)
+    sourceWasGitRepo = false
+  } else {
     try {
-      const exists = await executeCommand(['test', '-d', normalizedInputPath], { silent: true })
-        .then(() => true)
-        .catch(() => false)
-      
-      if (!exists) {
-        throw new Error(`No such file or directory: '${normalizedInputPath}'`)
-      }
-      
       const isGit = await isValidGitRepo(normalizedInputPath, env)
-      
+        
       if (isGit) {
         sourceWasGitRepo = true
         const baseName = path.basename(normalizedInputPath)
@@ -172,12 +167,9 @@ export async function initLocalRepo(
       }
       throw new Error(`Failed to process absolute path '${normalizedInputPath}': ${getErrorMessage(error)}`)
     }
-  } else {
-    repoLocalPath = normalizedInputPath
-    targetPath = path.join(getReposPath(), repoLocalPath)
   }
   
-  const existing = db.getRepoByLocalPath(database, repoLocalPath)
+  const existing = await db.getRepoByLocalPath(database, repoLocalPath)
   if (existing) {
     logger.info(`Local repo already exists in database: ${repoLocalPath}`)
     return existing
@@ -196,7 +188,7 @@ export async function initLocalRepo(
   let directoryCreated = false
   
   try {
-    repo = db.createRepo(database, createRepoInput)
+    repo = await db.createRepo(database, createRepoInput)
     logger.info(`Created database record for local repo: ${repoLocalPath} (id: ${repo.id})`)
   } catch (error: unknown) {
     logger.error(`Failed to create database record for local repo: ${repoLocalPath}`, error)
@@ -226,9 +218,13 @@ export async function initLocalRepo(
       }
     }
     
-    const isGitRepo = await executeCommand(['git', '-C', targetPath, 'rev-parse', '--git-dir'])
-      .then(() => true)
-      .catch(() => false)
+    let isGitRepo = false
+    try {
+      await executeCommand(['git', '-C', targetPath, 'rev-parse', '--git-dir'])
+      isGitRepo = true
+    } catch {
+      isGitRepo = false
+    }
     
     if (!isGitRepo) {
       throw new Error(`Git initialization failed - directory exists but is not a valid git repository`)
@@ -249,14 +245,14 @@ export async function initLocalRepo(
     
     if (directoryCreated && !sourceWasGitRepo) {
       try {
-        await executeCommand(['rm', '-rf', repoLocalPath], getReposPath())
+        await executeCommand(['rm', '-rf', repoLocalPath], { cwd: getReposPath() })
         logger.info(`Rolled back directory: ${repoLocalPath}`)
       } catch (fsError: unknown) {
         logger.error(`Failed to rollback directory ${repoLocalPath}:`, getErrorMessage(fsError))
       }
     } else if (sourceWasGitRepo) {
       try {
-        await executeCommand(['rm', '-rf', repoLocalPath], getReposPath())
+        await executeCommand(['rm', '-rf', repoLocalPath], { cwd: getReposPath() })
         logger.info(`Cleaned up copied directory: ${repoLocalPath}`)
       } catch (fsError: unknown) {
         logger.error(`Failed to clean up copied directory ${repoLocalPath}:`, getErrorMessage(fsError))
@@ -268,7 +264,7 @@ export async function initLocalRepo(
 }
 
 export async function cloneRepo(
-  database: Database,
+  database: DBClient,
   gitAuthService: GitAuthService,
   repoUrl: string,
   branch?: string,
@@ -279,7 +275,7 @@ export async function cloneRepo(
   const worktreeDirName = branch && useWorktree ? `${repoName}-${branch.replace(/[\\/]/g, '-')}` : repoName
   const localPath = worktreeDirName
   
-  const existing = db.getRepoByUrlAndBranch(database, normalizedRepoUrl, branch)
+  const existing = await db.getRepoByUrlAndBranch(database, normalizedRepoUrl, branch)
   
   if (existing) {
     logger.info(`Repo branch already exists: ${normalizedRepoUrl}${branch ? `#${branch}` : ''}`)
@@ -287,7 +283,7 @@ export async function cloneRepo(
   }
   
   await ensureDirectoryExists(getReposPath())
-  const baseRepoExists = await executeCommand(['bash', '-c', `test -d ${baseRepoDirName} && echo exists || echo missing`], path.resolve(getReposPath()))
+  const baseRepoExists = await executeCommand(['bash', '-c', `test -d ${baseRepoDirName} && echo exists || echo missing`], { cwd: path.resolve(getReposPath()) })
   
   const shouldUseWorktree = useWorktree && branch && baseRepoExists.trim() === 'exists'
   
@@ -304,7 +300,7 @@ export async function cloneRepo(
     createRepoInput.isWorktree = true
   }
   
-  const repo = db.createRepo(database, createRepoInput)
+  const repo = await db.createRepo(database, createRepoInput)
 
   try {
     const env = gitAuthService.getGitEnvironment()
@@ -320,9 +316,13 @@ export async function cloneRepo(
       
        await createWorktreeSafely(baseRepoPath, worktreePath, branch, env)
       
-      const worktreeVerified = await executeCommand(['test', '-d', worktreePath])
-        .then(() => true)
-        .catch(() => false)
+      let worktreeVerified = false
+      try {
+        await executeCommand(['test', '-d', worktreePath])
+        worktreeVerified = true
+      } catch {
+        worktreeVerified = false
+      }
       
       if (!worktreeVerified) {
         throw new Error(`Worktree directory was not created at: ${worktreePath}`)
@@ -333,12 +333,12 @@ export async function cloneRepo(
     } else if (branch && baseRepoExists.trim() === 'exists' && useWorktree) {
       logger.info(`Base repo exists but worktree creation failed, cloning branch separately`)
       
-      const worktreeExists = await executeCommand(['bash', '-c', `test -d ${worktreeDirName} && echo exists || echo missing`], path.resolve(getReposPath()))
+      const worktreeExists = await executeCommand(['bash', '-c', `test -d ${worktreeDirName} && echo exists || echo missing`], { cwd: path.resolve(getReposPath()) })
       if (worktreeExists.trim() === 'exists') {
         logger.info(`Workspace directory exists, removing it: ${worktreeDirName}`)
         try {
-          await executeCommand(['rm', '-rf', worktreeDirName], getReposPath())
-          const verifyRemoved = await executeCommand(['bash', '-c', `test -d ${worktreeDirName} && echo exists || echo removed`], getReposPath())
+          await executeCommand(['rm', '-rf', worktreeDirName], { cwd: getReposPath() })
+          const verifyRemoved = await executeCommand(['bash', '-c', `test -d ${worktreeDirName} && echo exists || echo removed`], { cwd: getReposPath() })
           if (verifyRemoved.trim() === 'exists') {
             throw new Error(`Failed to remove existing directory: ${worktreeDirName}`)
           }
@@ -374,7 +374,13 @@ export async function cloneRepo(
     } else {
       if (baseRepoExists.trim() === 'exists') {
         logger.info(`Repository directory already exists, verifying it's a valid git repo: ${baseRepoDirName}`)
-        const isValidRepo = await executeCommand(['git', '-C', path.resolve(getReposPath(), baseRepoDirName), 'rev-parse', '--git-dir'], path.resolve(getReposPath())).then(() => 'valid').catch(() => 'invalid')
+        let isValidRepo = 'invalid'
+        try {
+          await executeCommand(['git', '-C', path.resolve(getReposPath(), baseRepoDirName), 'rev-parse', '--git-dir'], { cwd: path.resolve(getReposPath()) })
+          isValidRepo = 'valid'
+        } catch {
+          isValidRepo = 'invalid'
+        }
         
         if (isValidRepo.trim() === 'valid') {
           logger.info(`Valid repository found: ${normalizedRepoUrl}`)
@@ -416,18 +422,18 @@ export async function cloneRepo(
           return { ...repo, cloneStatus: 'ready' }
         } else {
           logger.warn(`Invalid repository directory found, removing and recloning: ${baseRepoDirName}`)
-          await executeCommand(['rm', '-rf', baseRepoDirName], getReposPath())
+          await executeCommand(['rm', '-rf', baseRepoDirName], { cwd: getReposPath() })
         }
       }
       
       logger.info(`Cloning repo: ${normalizedRepoUrl}${branch ? ` to branch ${branch}` : ''}`)
       
-      const worktreeExists = await executeCommand(['bash', '-c', `test -d ${worktreeDirName} && echo exists || echo missing`], getReposPath())
+      const worktreeExists = await executeCommand(['bash', '-c', `test -d ${worktreeDirName} && echo exists || echo missing`], { cwd: getReposPath() })
       if (worktreeExists.trim() === 'exists') {
         logger.info(`Workspace directory exists, removing it: ${worktreeDirName}`)
         try {
-          await executeCommand(['rm', '-rf', worktreeDirName], getReposPath())
-          const verifyRemoved = await executeCommand(['bash', '-c', `test -d ${worktreeDirName} && echo exists || echo removed`], getReposPath())
+          await executeCommand(['rm', '-rf', worktreeDirName], { cwd: getReposPath() })
+          const verifyRemoved = await executeCommand(['bash', '-c', `test -d ${worktreeDirName} && echo exists || echo removed`], { cwd: getReposPath() })
         if (verifyRemoved.trim() === 'exists') {
           throw new Error(`Failed to remove existing directory: ${worktreeDirName}`)
         }
@@ -488,12 +494,12 @@ export async function getCurrentBranch(repo: Repo, env: Record<string, string>):
 }
 
 export async function switchBranch(
-  database: Database,
+  database: DBClient,
   gitAuthService: GitAuthService,
   repoId: number,
   branch: string
 ): Promise<void> {
-  const repo = db.getRepoById(database, repoId)
+  const repo = await db.getRepoById(database, repoId)
   if (!repo) {
     throw new Error(`Repo not found: ${repoId}`)
   }
@@ -522,8 +528,8 @@ export async function switchBranch(
   }
 }
 
-export async function createBranch(database: Database, gitAuthService: GitAuthService, repoId: number, branch: string): Promise<void> {
-  const repo = db.getRepoById(database, repoId)
+export async function createBranch(database: DBClient, gitAuthService: GitAuthService, repoId: number, branch: string): Promise<void> {
+  const repo = await db.getRepoById(database, repoId)
   if (!repo) {
     throw new Error(`Repo not found: ${repoId}`)
   }
@@ -549,11 +555,11 @@ export async function createBranch(database: Database, gitAuthService: GitAuthSe
 }
 
 export async function pullRepo(
-  database: Database,
+  database: DBClient,
   gitAuthService: GitAuthService,
   repoId: number
 ): Promise<void> {
-  const repo = db.getRepoById(database, repoId)
+    const repo = await db.getRepoById(database, repoId)
   if (!repo) {
     throw new Error(`Repo not found: ${repoId}`)
   }
@@ -577,8 +583,8 @@ export async function pullRepo(
   }
 }
 
-export async function deleteRepoFiles(database: Database, repoId: number): Promise<void> {
-  const repo = db.getRepoById(database, repoId)
+export async function deleteRepoFiles(database: DBClient, repoId: number): Promise<void> {
+  const repo = await db.getRepoById(database, repoId)
   if (!repo) {
     throw new Error(`Repo not found: ${repoId}`)
   }
@@ -595,11 +601,15 @@ export async function deleteRepoFiles(database: Database, repoId: number): Promi
     } catch {
       // Worktree removal failed, continue with directory removal
     } finally {
-      await executeCommand(['git', '-C', baseRepoPath, 'worktree', 'prune']).catch(() => {})
+      try {
+        await executeCommand(['git', '-C', baseRepoPath, 'worktree', 'prune'])
+      } catch {
+        // Ignore errors during worktree prune
+      }
     }
   }
 
-  await executeCommand(['rm', '-rf', dirName], getReposPath())
+  await executeCommand(['rm', '-rf', dirName], { cwd: getReposPath() })
   db.deleteRepo(database, repoId)
 }
 
@@ -639,24 +649,33 @@ function normalizeRepoUrl(url: string): { url: string; name: string } {
   }
 }
 
-export async function cleanupOrphanedDirectories(database: Database): Promise<void> {
+export async function cleanupOrphanedDirectories(database: DBClient): Promise<void> {
   try {
     const reposPath = getReposPath()
     await ensureDirectoryExists(reposPath)
 
-    const dirResult = await executeCommand(['ls', '-1'], reposPath).catch(() => '')
+    let dirResult = ''
+    try {
+      dirResult = await executeCommand(['ls', '-1'], { cwd: reposPath })
+    } catch {
+      dirResult = ''
+    }
     const directories = dirResult.split('\n').filter(d => d.trim())
 
     if (directories.length === 0) {
       return
     }
 
-    const allRepos = db.listRepos(database)
+    const allRepos = await db.listRepos(database)
     const trackedPaths = new Set(allRepos.map(r => r.localPath.split('/').pop()))
     const orphanedDirs = directories.filter(dir => !trackedPaths.has(dir))
 
     for (const dir of orphanedDirs) {
-      await executeCommand(['rm', '-rf', dir], reposPath).catch(() => {})
+      try {
+        await executeCommand(['rm', '-rf', dir], { cwd: reposPath })
+      } catch {
+        // Ignore errors during cleanup
+      }
     }
   } catch {
     // Cleanup is best-effort
@@ -666,15 +685,26 @@ export async function cleanupOrphanedDirectories(database: Database): Promise<vo
 async function createWorktreeSafely(baseRepoPath: string, worktreePath: string, branch: string, env: Record<string, string>): Promise<void> {
   const currentBranch = await safeGetCurrentBranch(baseRepoPath, env)
   if (currentBranch === branch) {
-    const defaultBranch = await executeCommand(['git', '-C', baseRepoPath, 'rev-parse', '--abbrev-ref', 'origin/HEAD'], { env })
-      .then(ref => ref.trim().replace('origin/', ''))
-      .catch(() => 'main')
+    let defaultBranch = 'main'
+    try {
+      const ref = await executeCommand(['git', '-C', baseRepoPath, 'rev-parse', '--abbrev-ref', 'origin/HEAD'], { env })
+      defaultBranch = ref.trim().replace('origin/', '')
+    } catch {
+      defaultBranch = 'main'
+    }
 
-    await executeCommand(['git', '-C', baseRepoPath, 'checkout', defaultBranch], { env })
-      .catch(() => executeCommand(['git', '-C', baseRepoPath, 'checkout', 'main'], { env }))
+    try {
+      await executeCommand(['git', '-C', baseRepoPath, 'checkout', defaultBranch], { env })
+    } catch {
+      await executeCommand(['git', '-C', baseRepoPath, 'checkout', 'main'], { env })
+    }
   }
 
-  await executeCommand(['git', '-C', baseRepoPath, 'worktree', 'prune'], { env }).catch(() => {})
+  try {
+    await executeCommand(['git', '-C', baseRepoPath, 'worktree', 'prune'], { env })
+  } catch {
+    // Ignore errors during worktree prune
+  }
 
   let branchExists = false
   try {

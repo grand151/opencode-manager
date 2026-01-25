@@ -51,12 +51,12 @@ export function createRepoRoutes(database: Database, gitAuthService: GitAuthServ
       
       if (openCodeConfigName) {
         const settingsService = new SettingsService(database)
-        const configContent = settingsService.getOpenCodeConfigContent(openCodeConfigName)
+        const configContent = await settingsService.getOpenCodeConfigContent(openCodeConfigName)
         
         if (configContent) {
           const openCodeConfigPath = getOpenCodeConfigFilePath()
           await writeFileContent(openCodeConfigPath, configContent)
-          db.updateRepoConfigName(database, repo.id, openCodeConfigName)
+          await db.updateRepoConfigName(database, repo.id, openCodeConfigName)
           logger.info(`Applied config '${openCodeConfigName}' to: ${openCodeConfigPath}`)
         }
       }
@@ -68,11 +68,11 @@ export function createRepoRoutes(database: Database, gitAuthService: GitAuthServ
     }
   })
   
-app.get('/', async (c) => {
+  app.get('/', async (c) => {
     try {
       const settingsService = new SettingsService(database)
-      const settings = settingsService.getSettings()
-      const repos = db.listRepos(database, settings.preferences.repoOrder)
+      const settings = await settingsService.getSettings()
+      const repos = await db.listRepos(database, settings.preferences.repoOrder)
 
       const reposWithCurrentBranch = await Promise.all(
         repos.map(async (repo) => {
@@ -97,7 +97,7 @@ app.get('/', async (c) => {
       }
 
       const settingsService = new SettingsService(database)
-      settingsService.updateSettings({
+      await settingsService.updateSettings({
         repoOrder: body.order,
       })
 
@@ -111,7 +111,7 @@ app.get('/', async (c) => {
   app.get('/:id', async (c) => {
     try {
       const id = parseInt(c.req.param('id'))
-      const repo = db.getRepoById(database, id)
+      const repo = await db.getRepoById(database, id)
       
       if (!repo) {
         return c.json({ error: 'Repo not found' }, 404)
@@ -129,7 +129,7 @@ app.get('/', async (c) => {
   app.delete('/:id', async (c) => {
     try {
       const id = parseInt(c.req.param('id'))
-      const repo = db.getRepoById(database, id)
+      const repo = await db.getRepoById(database, id)
       
       if (!repo) {
         return c.json({ error: 'Repo not found' }, 404)
@@ -149,7 +149,7 @@ app.get('/', async (c) => {
       const id = parseInt(c.req.param('id'))
       await repoService.pullRepo(database, gitAuthService, id)
       
-      const repo = db.getRepoById(database, id)
+      const repo = await db.getRepoById(database, id)
       return c.json(repo)
     } catch (error: unknown) {
       logger.error('Failed to pull repo:', error)
@@ -160,7 +160,7 @@ app.get('/', async (c) => {
   app.post('/:id/config/switch', async (c) => {
     try {
       const id = parseInt(c.req.param('id'))
-      const repo = db.getRepoById(database, id)
+      const repo = await db.getRepoById(database, id)
       
       if (!repo) {
         return c.json({ error: 'Repo not found' }, 404)
@@ -174,7 +174,7 @@ app.get('/', async (c) => {
       }
       
       const settingsService = new SettingsService(database)
-      const configContent = settingsService.getOpenCodeConfigContent(configName)
+      const configContent = await settingsService.getOpenCodeConfigContent(configName)
       
       if (!configContent) {
         return c.json({ error: `Config '${configName}' not found` }, 404)
@@ -184,7 +184,7 @@ app.get('/', async (c) => {
       
       await writeFileContent(openCodeConfigPath, configContent)
       
-      db.updateRepoConfigName(database, id, configName)
+      await db.updateRepoConfigName(database, id, configName)
       
       logger.info(`Switched config for repo ${id} to '${configName}'`)
       logger.info(`Updated OpenCode config: ${openCodeConfigPath}`)
@@ -193,7 +193,7 @@ app.get('/', async (c) => {
       await opencodeServerManager.stop()
       await opencodeServerManager.start()
       
-      const updatedRepo = db.getRepoById(database, id)
+      const updatedRepo = await db.getRepoById(database, id)
       return c.json(updatedRepo)
     } catch (error: unknown) {
       logger.error('Failed to switch repo config:', error)
@@ -204,7 +204,7 @@ app.get('/', async (c) => {
   app.post('/:id/branch/switch', async (c) => {
     try {
       const id = parseInt(c.req.param('id'))
-      const repo = db.getRepoById(database, id)
+      const repo = await db.getRepoById(database, id)
       
       if (!repo) {
         return c.json({ error: 'Repo not found' }, 404)
@@ -219,7 +219,7 @@ app.get('/', async (c) => {
       
       await repoService.switchBranch(database, gitAuthService, id, branch)
       
-      const updatedRepo = db.getRepoById(database, id)
+      const updatedRepo = await db.getRepoById(database, id)
       const currentBranch = await repoService.getCurrentBranch(updatedRepo!, gitAuthService.getGitEnvironment())
       
       return c.json({ ...updatedRepo, currentBranch })
@@ -232,7 +232,7 @@ app.get('/', async (c) => {
   app.post('/:id/branch/create', async (c) => {
     try {
       const id = parseInt(c.req.param('id'))
-      const repo = db.getRepoById(database, id)
+      const repo = await db.getRepoById(database, id)
       
       if (!repo) {
         return c.json({ error: 'Repo not found' }, 404)
@@ -247,7 +247,7 @@ app.get('/', async (c) => {
       
       await repoService.createBranch(database, gitAuthService, id, branch)
       
-      const updatedRepo = db.getRepoById(database, id)
+      const updatedRepo = await db.getRepoById(database, id)
       const currentBranch = await repoService.getCurrentBranch(updatedRepo!, gitAuthService.getGitEnvironment())
       
       return c.json({ ...updatedRepo, currentBranch })
@@ -260,14 +260,14 @@ app.get('/', async (c) => {
   app.get('/:id/download', async (c) => {
     try {
       const id = parseInt(c.req.param('id'))
-      const repo = db.getRepoById(database, id)
+      const repo = await db.getRepoById(database, id)
       
       if (!repo) {
         return c.json({ error: 'Repo not found' }, 404)
       }
       
-      const repoPath = path.resolve(getReposPath(), repo.localPath)
-      const repoName = path.basename(repo.localPath)
+      const repoPath = path.resolve(getReposPath(), repo!.localPath)
+      const repoName = path.basename(repo!.localPath)
       
       logger.info(`Starting archive creation for repo ${id}: ${repoPath}`)
       const archivePath = await archiveService.createRepoArchive(repoPath)
@@ -298,7 +298,7 @@ app.get('/', async (c) => {
   app.post('/:id/reset-permissions', async (c) => {
     try {
       const id = parseInt(c.req.param('id'))
-      const repo = db.getRepoById(database, id)
+      const repo = await db.getRepoById(database, id)
       
       if (!repo) {
         return c.json({ error: 'Repo not found' }, 404)
@@ -307,7 +307,7 @@ app.get('/', async (c) => {
       const response = await proxyToOpenCodeWithDirectory(
         '/instance/dispose',
         'POST',
-        repo.fullPath
+        repo!.fullPath
       )
       
       if (!response.ok) {
@@ -316,7 +316,7 @@ app.get('/', async (c) => {
         return c.json({ error: 'Failed to reset permissions' }, 500)
       }
       
-      logger.info(`Reset permissions for repo ${id} (${repo.fullPath})`)
+      logger.info(`Reset permissions for repo ${id} (${repo!.fullPath})`)
       return c.json({ success: true })
     } catch (error: unknown) {
       logger.error('Failed to reset permissions:', error)
