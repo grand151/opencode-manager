@@ -8,10 +8,6 @@ export function createSSERoutes() {
   const app = new Hono()
 
   app.get('/stream', async (c) => {
-    c.header('Cache-Control', 'no-cache, no-store, no-transform')
-    c.header('Connection', 'keep-alive')
-    c.header('X-Accel-Buffering', 'no')
-
     const directoriesParam = c.req.query('directories')
     const directories = directoriesParam ? directoriesParam.split(',').filter(Boolean) : []
     const clientId = `client_${Date.now()}_${Math.random().toString(36).slice(2)}`
@@ -90,33 +86,27 @@ export function createSSERoutes() {
   })
 
   app.get('/test-stream', async (c) => {
-    c.header('Content-Type', 'text/event-stream')
-    c.header('Cache-Control', 'no-cache, no-store, no-transform')
-    c.header('Connection', 'keep-alive')
-    c.header('X-Accel-Buffering', 'no')
+    return stream(c, async (writer) => {
+      const writeSSE = (event: string, data: string) => {
+        const lines = []
+        if (event) lines.push(`event: ${event}`)
+        lines.push(`data: ${data}`)
+        lines.push('')
+        lines.push('')
+        writer.write(new TextEncoder().encode(lines.join('\n')))
+      }
 
-    return streamSSE(c, async (stream) => {
-      await stream.writeSSE({
-        event: 'test',
-        data: JSON.stringify({ message: 'SSE working', timestamp: Date.now() })
-      })
+      writeSSE('test', JSON.stringify({ message: 'SSE working', timestamp: Date.now() }))
 
       let count = 0
       const interval = setInterval(async () => {
         count++
         try {
-          await stream.writeSSE({
-            event: 'ping',
-            data: JSON.stringify({ count, timestamp: Date.now() })
-          })
+          writeSSE('ping', JSON.stringify({ count, timestamp: Date.now() }))
         } catch {
           clearInterval(interval)
         }
       }, 1000)
-
-      stream.onAbort(() => {
-        clearInterval(interval)
-      })
 
       await new Promise(() => {})
     })
