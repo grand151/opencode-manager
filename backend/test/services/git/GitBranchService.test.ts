@@ -218,12 +218,10 @@ describe('GitBranchService', () => {
     it('handles getBranchStatus failure for current branch gracefully', async () => {
       const mockRepo = { id: 1, fullPath: '/path/to/repo' }
       getRepoByIdMock.mockReturnValue(mockRepo as any)
-      let revListCalls = 0
       executeCommandMock.mockImplementation((args) => {
         if (args.includes('rev-parse')) return Promise.resolve('main')
         if (args.includes('branch')) return Promise.resolve('* main abc123 Initial commit')
         if (args.includes('rev-list')) {
-          revListCalls++
           return Promise.reject(new Error('No upstream'))
         }
         return Promise.resolve('')

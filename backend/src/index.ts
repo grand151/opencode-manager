@@ -201,7 +201,7 @@ try {
   logger.error('Failed to initialize workspace:', error)
 }
 
-app.route('/api/auth', createAuthRoutes(auth, db))
+app.route('/api/auth', createAuthRoutes(auth))
 app.route('/api/auth-info', createAuthInfoRoutes(auth, db))
 
 app.route('/api/health', createHealthRoutes(db))
