@@ -88,6 +88,22 @@ export function QuestionPrompt({ question, onReply, onReject }: QuestionPromptPr
     })
   }, [])
 
+  const handleExpandOther = useCallback((questionIndex: number) => {
+    if (!isMultiSelect) {
+      setAnswers(prev => {
+        const updated = [...prev]
+        updated[questionIndex] = []
+        return updated
+      })
+    }
+    setConfirmedCustoms(prev => {
+      const updated = [...prev]
+      updated[questionIndex] = ''
+      return updated
+    })
+    setExpandedOther(questionIndex)
+  }, [isMultiSelect])
+
   const confirmCustomInput = useCallback((questionIndex: number) => {
     const value = customInputs[questionIndex]?.trim()
     if (!value) {
@@ -124,6 +140,14 @@ export function QuestionPrompt({ question, onReply, onReject }: QuestionPromptPr
       handleSubmitSingle(value)
     }
   }, [customInputs, confirmedCustoms, questions, isSingleSelect, goToNext, handleSubmitSingle])
+
+  const handleNext = useCallback(() => {
+    if (expandedOther === currentIndex) {
+      confirmCustomInput(currentIndex)
+    } else {
+      goToNext()
+    }
+  }, [expandedOther, currentIndex, confirmCustomInput, goToNext])
 
   const handleSubmit = async () => {
     setIsSubmitting(true)
@@ -194,7 +218,7 @@ export function QuestionPrompt({ question, onReply, onReject }: QuestionPromptPr
         </button>
       </div>
 
-      <div className="p-3 max-h-[40vh] overflow-y-auto">
+      <div className="p-3 max-h-[70vh] overflow-y-auto">
         {isConfirmStep ? (
           <ConfirmStep 
             questions={questions} 
@@ -210,7 +234,7 @@ export function QuestionPrompt({ question, onReply, onReject }: QuestionPromptPr
             expandedOther={expandedOther === currentIndex}
             isMultiSelect={isMultiSelect}
             onSelectOption={(label) => selectOption(currentIndex, label)}
-            onExpandOther={() => setExpandedOther(currentIndex)}
+            onExpandOther={() => handleExpandOther(currentIndex)}
             onCustomInputChange={(value) => handleCustomInput(currentIndex, value)}
             onConfirmCustomInput={() => confirmCustomInput(currentIndex)}
             onCollapseOther={() => setExpandedOther(null)}
@@ -267,11 +291,11 @@ export function QuestionPrompt({ question, onReply, onReject }: QuestionPromptPr
           ) : (
             <Button
               size="sm"
-              onClick={goToNext}
-              disabled={currentIndex === totalSteps - 1}
+              onClick={handleNext}
+              disabled={currentIndex === totalSteps - 1 || (expandedOther === currentIndex && !customInputs[currentIndex]?.trim())}
               className="flex-1 h-10 bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {currentIndex === questions.length - 1 ? 'Review' : 'Next'}
+              {expandedOther === currentIndex ? 'Confirm' : (currentIndex === questions.length - 1 ? 'Review' : 'Next')}
               <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           )
@@ -315,6 +339,7 @@ function QuestionStep({
   useEffect(() => {
     if (expandedOther && textareaRef.current) {
       textareaRef.current.focus()
+      textareaRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
   }, [expandedOther])
 
@@ -388,7 +413,7 @@ function QuestionStep({
           <div className="flex items-center gap-2">
             <div className={cn(
               "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors",
-              isCustomSelected 
+              isCustomSelected
                 ? "border-blue-500 bg-blue-500" 
                 : "border-muted-foreground"
             )}>
@@ -421,24 +446,6 @@ function QuestionStep({
                 }
               }}
             />
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onCollapseOther}
-                className="flex-1 h-8"
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={onConfirmCustomInput}
-                disabled={!customInput.trim()}
-                className="flex-1 h-8 bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                Confirm
-              </Button>
-            </div>
           </div>
         )}
 

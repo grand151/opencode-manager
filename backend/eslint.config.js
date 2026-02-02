@@ -28,4 +28,10 @@ export default defineConfig([
       'no-useless-escape': 'warn',
     },
   },
+  {
+    files: ['test/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
 ])

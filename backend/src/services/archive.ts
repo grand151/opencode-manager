@@ -4,6 +4,11 @@ import { readdir, stat, unlink } from 'fs/promises'
 import path from 'path'
 import os from 'os'
 import { logger } from '../utils/logger'
+import { getReposPath } from '@opencode-manager/shared/config/env'
+
+function resolvePath(userPath: string): string {
+  return path.isAbsolute(userPath) ? userPath : path.join(getReposPath(), userPath)
+}
 
 export interface ArchiveOptions {
   includeGit?: boolean
@@ -57,14 +62,14 @@ async function getIgnoredPaths(gitRoot: string, targetPath: string, paths: strin
     const { spawn } = await import('child_process')
     
     const targetRelativeToRoot = path.relative(gitRoot, targetPath)
-    console.log('[getIgnoredPaths] gitRoot:', gitRoot, 'targetPath:', targetPath, 'targetRelativeToRoot:', targetRelativeToRoot)
+    logger.debug('[getIgnoredPaths] gitRoot:', gitRoot, 'targetPath:', targetPath, 'targetRelativeToRoot:', targetRelativeToRoot)
     
     const relativePaths = paths.map(p => {
       const relativeToTarget = p
       return targetRelativeToRoot ? path.join(targetRelativeToRoot, relativeToTarget) : relativeToTarget
     })
     
-    console.log('[getIgnoredPaths] First 5 relativePaths:', relativePaths.slice(0, 5))
+    logger.debug('[getIgnoredPaths] First 5 relativePaths:', relativePaths.slice(0, 5))
     
     return new Promise((resolve) => {
       const ignored = new Set<string>()
@@ -83,9 +88,9 @@ async function getIgnoredPaths(gitRoot: string, targetPath: string, paths: strin
       proc.stdin?.end()
 
       proc.on('close', (code) => {
-        console.log('[getIgnoredPaths] git check-ignore exited with code:', code)
+        logger.debug('[getIgnoredPaths] git check-ignore exited with code:', code)
         const ignoredFullPaths = stdout.split('\n').filter(p => p.trim())
-        console.log('[getIgnoredPaths] Raw ignored count:', ignoredFullPaths.length, 'first 5:', ignoredFullPaths.slice(0, 5))
+        logger.debug('[getIgnoredPaths] Raw ignored count:', ignoredFullPaths.length, 'first 5:', ignoredFullPaths.slice(0, 5))
         const targetRelativeToRoot = path.relative(gitRoot, targetPath)
         
         for (const fullPath of ignoredFullPaths) {
@@ -99,7 +104,7 @@ async function getIgnoredPaths(gitRoot: string, targetPath: string, paths: strin
             ignored.add(relativePath)
           }
         }
-        console.log('[getIgnoredPaths] Final ignored set size:', ignored.size)
+        logger.debug('[getIgnoredPaths] Final ignored set size:', ignored.size)
         resolve(ignored)
       })
 
@@ -200,6 +205,7 @@ async function filterIgnoredPaths(targetPath: string, allPaths: string[], option
 }
 
 export async function createRepoArchive(repoPath: string, options?: ArchiveOptions): Promise<string> {
+  repoPath = resolvePath(repoPath)
   const repoName = path.basename(repoPath)
   const tempFile = path.join(os.tmpdir(), `${repoName}-${Date.now()}.zip`)
 
@@ -237,6 +243,7 @@ export async function createRepoArchive(repoPath: string, options?: ArchiveOptio
 }
 
 export async function createDirectoryArchive(directoryPath: string, archiveName?: string, options?: ArchiveOptions): Promise<string> {
+  directoryPath = resolvePath(directoryPath)
   const dirName = archiveName || path.basename(directoryPath)
   const tempFile = path.join(os.tmpdir(), `${dirName}-${Date.now()}.zip`)
 
@@ -293,34 +300,35 @@ export async function getArchiveSize(filePath: string): Promise<number> {
 }
 
 export async function getIgnoredPathsList(directoryPath: string): Promise<string[]> {
-  console.log('[getIgnoredPathsList] Starting for:', directoryPath)
+  directoryPath = resolvePath(directoryPath)
+  logger.debug('[getIgnoredPathsList] Starting for:', directoryPath)
   const gitRoot = await findGitRoot(directoryPath)
-  console.log('[getIgnoredPathsList] Git root:', gitRoot)
+  logger.debug('[getIgnoredPathsList] Git root:', gitRoot)
   
   if (!gitRoot) {
-    console.log('[getIgnoredPathsList] No git root found')
+    logger.debug('[getIgnoredPathsList] No git root found')
     const hasGitDir = await collectFiles(directoryPath).then(
       paths => paths.some(p => p.startsWith('.git/') || p === '.git')
     ).catch(() => false)
     
     if (hasGitDir) {
-      console.log('[getIgnoredPathsList] Has .git dir, returning [.git/]')
+      logger.debug('[getIgnoredPathsList] Has .git dir, returning [.git/]')
       return ['.git/']
     }
-    console.log('[getIgnoredPathsList] No .git dir, returning []')
+    logger.debug('[getIgnoredPathsList] No .git dir, returning []')
     return []
   }
   
   const allPaths = await collectFiles(directoryPath)
-  console.log('[getIgnoredPathsList] Collected', allPaths.length, 'paths')
+  logger.debug('[getIgnoredPathsList] Collected', allPaths.length, 'paths')
   const ignoredSet = new Set<string>()
   const batchSize = 1000
 
   for (let i = 0; i < allPaths.length; i += batchSize) {
     const batch = allPaths.slice(i, i + batchSize)
-    console.log('[getIgnoredPathsList] Checking batch', i, 'to', i + batch.length)
+    logger.debug('[getIgnoredPathsList] Checking batch', i, 'to', i + batch.length)
     const ignored = await getIgnoredPaths(gitRoot, directoryPath, batch)
-    console.log('[getIgnoredPathsList] Batch ignored count:', ignored.size)
+    logger.debug('[getIgnoredPathsList] Batch ignored count:', ignored.size)
     for (const p of ignored) {
       ignoredSet.add(p)
       if (p.endsWith('/')) {
@@ -331,7 +339,7 @@ export async function getIgnoredPathsList(directoryPath: string): Promise<string
     }
   }
   
-  console.log('[getIgnoredPathsList] Total ignored set size:', ignoredSet.size)
+  logger.debug('[getIgnoredPathsList] Total ignored set size:', ignoredSet.size)
 
   const ignoredDirs: string[] = []
   const processedDirs = new Set<string>()
@@ -358,14 +366,14 @@ export async function getIgnoredPathsList(directoryPath: string): Promise<string
   }
 
   const gitDirExists = await stat(path.join(directoryPath, '.git')).then(() => true).catch(() => false)
-  console.log('[getIgnoredPathsList] .git exists:', gitDirExists)
+  logger.debug('[getIgnoredPathsList] .git exists:', gitDirExists)
   if (gitDirExists && !ignoredDirs.some(p => p.startsWith('.git'))) {
     ignoredDirs.push('.git/')
   }
 
   ignoredDirs.sort()
   
-  console.log('[getIgnoredPathsList] Final result:', ignoredDirs)
+  logger.debug('[getIgnoredPathsList] Final result:', ignoredDirs)
 
   return ignoredDirs
 }

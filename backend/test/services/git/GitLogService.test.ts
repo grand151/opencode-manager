@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach, type MockedFunction } from 'vitest'
 
 vi.mock('bun:sqlite', () => ({

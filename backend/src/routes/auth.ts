@@ -5,7 +5,7 @@ import { ENV } from '@opencode-manager/shared/config/env'
 import { logger } from '../utils/logger'
 import { hashPassword } from 'better-auth/crypto'
 
-export function createAuthRoutes(auth: AuthInstance, _db: Database) {
+export function createAuthRoutes(auth: AuthInstance): Hono {
   const app = new Hono()
 
   app.all('/*', async (c) => {

@@ -4,7 +4,7 @@ import { Hono } from 'hono'
 import type { ReadStream } from 'fs'
 import * as fileService from '../../src/services/files'
 import * as archiveService from '../../src/services/archive'
-import type { FileInfo, ChunkedFileInfo, PatchOperation } from '@opencode-manager/shared'
+import type { FileInfo, ChunkedFileInfo } from '@opencode-manager/shared'
 
 interface FileUploadResult {
   name: string
@@ -47,7 +47,6 @@ vi.mock('../../src/services/archive', () => ({
 }))
 
 const getFile = fileService.getFile as MockedFunction<typeof fileService.getFile>
-const getRawFileContent = fileService.getRawFileContent as MockedFunction<typeof fileService.getRawFileContent>
 const getFileRange = fileService.getFileRange as MockedFunction<typeof fileService.getFileRange>
 const uploadFile = fileService.uploadFile as MockedFunction<typeof fileService.uploadFile>
 const createFileOrFolder = fileService.createFileOrFolder as MockedFunction<typeof fileService.createFileOrFolder>
@@ -58,7 +57,6 @@ const applyFilePatches = fileService.applyFilePatches as MockedFunction<typeof f
 const createDirectoryArchive = archiveService.createDirectoryArchive as MockedFunction<typeof archiveService.createDirectoryArchive>
 const getArchiveSize = archiveService.getArchiveSize as MockedFunction<typeof archiveService.getArchiveSize>
 const getArchiveStream = archiveService.getArchiveStream as MockedFunction<typeof archiveService.getArchiveStream>
-const deleteArchive = archiveService.deleteArchive as MockedFunction<typeof archiveService.deleteArchive>
 
 describe('File Routes', () => {
   let app: Hono
@@ -81,7 +79,7 @@ describe('File Routes', () => {
       getArchiveSize.mockResolvedValue(1024)
       getArchiveStream.mockReturnValue(mockStream)
 
-      const response = await app.request('/api/files/test-repo/src/download-zip')
+      await app.request('/api/files/test-repo/src/download-zip')
 
       expect(createDirectoryArchive).toHaveBeenCalledWith('test-repo/src', undefined, {
         includeGit: false,
@@ -497,15 +495,6 @@ describe('File Routes', () => {
   })
 
   describe('Path Traversal Protection', () => {
-    const mockFileInfo: FileInfo = {
-      name: 'test.txt',
-      path: 'safe-path/test.txt',
-      isDirectory: false,
-      size: 100,
-      mimeType: 'text/plain',
-      content: '',
-      lastModified: new Date(),
-    }
 
     it('should reject path with ../ segments via service error', async () => {
       const error = { message: 'Path traversal detected', statusCode: 403 }

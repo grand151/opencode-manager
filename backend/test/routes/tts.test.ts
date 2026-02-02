@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fs from 'fs/promises'
-import { logger } from '../../src/utils/logger'
 
 vi.mock('fs/promises', () => ({
   mkdir: vi.fn(),
@@ -27,7 +26,6 @@ vi.mock('../../src/utils/logger', () => ({
 
 const mockMkdir = fs.mkdir as any
 const mockReadFile = fs.readFile as any
-const mockWriteFile = fs.writeFile as any
 const mockReaddir = fs.readdir as any
 const mockStat = fs.stat as any
 const mockUnlink = fs.unlink as any
@@ -36,29 +34,12 @@ import { createTTSRoutes, cleanupExpiredCache, getCacheStats, generateCacheKey, 
 
 describe('TTS Routes', () => {
   let mockDb: any
-  let ttsApp: any
-  let mockSettingsService: any
 
   beforeEach(() => {
     vi.clearAllMocks()
     
     mockDb = {} as any
-    mockSettingsService = {
-      getSettings: vi.fn().mockReturnValue({
-        preferences: {
-          tts: {
-            enabled: true,
-            apiKey: 'test-key',
-            endpoint: 'https://api.openai.com/v1/audio/speech',
-            voice: 'alloy',
-            model: 'tts-1',
-            speed: 1.0,
-          },
-        },
-      }),
-    }
-    
-    ttsApp = createTTSRoutes(mockDb)
+    createTTSRoutes(mockDb)
   })
 
   describe('generateCacheKey', () => {
