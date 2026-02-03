@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useModelSelection } from '@/hooks/useModelSelection'
 import { useVariants } from '@/hooks/useVariants'
-import { formatModelName } from '@/api/providers'
+import { formatModelName, getProviders } from '@/api/providers'
 import { useQuery } from '@tanstack/react-query'
 import { useOpenCodeClient } from '@/hooks/useOpenCode'
 
@@ -33,25 +33,25 @@ export function ModelQuickSelect({
   const { availableVariants, currentVariant, setVariant, clearVariant, hasVariants } = useVariants(opcodeUrl, directory)
   const client = useOpenCodeClient(opcodeUrl, directory)
 
-  const { data: providersData } = useQuery({
-    queryKey: ['opencode', 'providers', opcodeUrl, directory],
-    queryFn: () => client!.getProviders(),
-    enabled: !!client,
-    staleTime: 30000,
-  })
+   const { data: providersData } = useQuery({
+     queryKey: ['opencode', 'providers', opcodeUrl, directory],
+     queryFn: () => getProviders(),
+     enabled: !!client,
+     staleTime: 30000,
+   })
 
-  const recentModelsWithNames = useMemo(() => {
-    if (!providersData?.all || recentModels.length === 0) return []
-    
-    return recentModels
-      .filter(recent => {
-        const key = `${recent.providerID}/${recent.modelID}`
-        return key !== modelString
-      })
-      .slice(0, 5)
-      .map(recent => {
-        let displayName = recent.modelID
-        for (const provider of providersData.all) {
+   const recentModelsWithNames = useMemo(() => {
+     if (!providersData?.providers || providersData.providers.length === 0 || recentModels.length === 0) return []
+     
+     return recentModels
+       .filter(recent => {
+         const key = `${recent.providerID}/${recent.modelID}`
+         return key !== modelString
+       })
+       .slice(0, 5)
+       .map(recent => {
+         let displayName = recent.modelID
+         for (const provider of providersData.providers) {
           if (provider.id === recent.providerID && provider.models) {
             const modelData = provider.models[recent.modelID]
             if (modelData) {

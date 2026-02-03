@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useModelSelection } from './useModelSelection'
 import { useModelStore } from '@/stores/modelStore'
 import { useOpenCodeClient } from './useOpenCode'
+import { getProviders } from '@/api/providers'
 import { useQuery } from '@tanstack/react-query'
 
 export interface UseVariantsResult {
@@ -21,16 +22,16 @@ export function useVariants(
   const { setVariant: setStoreVariant, clearVariant: clearStoreVariant } = useModelStore()
   const client = useOpenCodeClient(opcodeUrl, directory)
 
-  const { data: providersData, isLoading } = useQuery({
-    queryKey: ['opencode', 'providers', opcodeUrl, directory],
-    queryFn: () => client!.getProviders(),
-    enabled: !!client && !!model,
-    staleTime: 30000,
-  })
+   const { data: providersData, isLoading } = useQuery({
+     queryKey: ['opencode', 'providers', opcodeUrl, directory],
+     queryFn: () => getProviders(),
+     enabled: !!client && !!model,
+     staleTime: 30000,
+   })
 
-  const currentModel = useMemo(() => {
-    if (!model || isLoading || !providersData?.all) return null
-    for (const provider of providersData.all) {
+   const currentModel = useMemo(() => {
+     if (!model || isLoading || !providersData?.providers || providersData.providers.length === 0) return null
+     for (const provider of providersData.providers) {
       if (provider.id === model.providerID && provider.models) {
         const modelData = provider.models[model.modelID]
         if (modelData) {
