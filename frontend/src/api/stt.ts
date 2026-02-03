@@ -1,5 +1,5 @@
-import axios from 'axios'
 import { API_BASE_URL } from '@/config'
+import { fetchWrapper, FetchError } from './fetchWrapper'
 
 export interface STTModelsResponse {
   models: string[]
@@ -24,17 +24,15 @@ export interface STTErrorResponse {
 
 export const sttApi = {
   getModels: async (userId = 'default', forceRefresh = false): Promise<STTModelsResponse> => {
-    const { data } = await axios.get(`${API_BASE_URL}/api/stt/models`, {
+    return fetchWrapper(`${API_BASE_URL}/api/stt/models`, {
       params: { userId, ...(forceRefresh && { refresh: 'true' }) },
     })
-    return data
   },
 
   getStatus: async (userId = 'default'): Promise<STTStatusResponse> => {
-    const { data } = await axios.get(`${API_BASE_URL}/api/stt/status`, {
+    return fetchWrapper(`${API_BASE_URL}/api/stt/status`, {
       params: { userId },
     })
-    return data
   },
 
   transcribe: async (
@@ -43,23 +41,41 @@ export const sttApi = {
     signal?: AbortSignal
   ): Promise<STTTranscribeResponse> => {
     const formData = new FormData()
-    
-    const extension = audioBlob.type.includes('webm') ? 'webm' : 
+
+    const extension = audioBlob.type.includes('webm') ? 'webm' :
                       audioBlob.type.includes('ogg') ? 'ogg' :
                       audioBlob.type.includes('mp4') ? 'm4a' : 'webm'
     formData.append('audio', audioBlob, `recording.${extension}`)
 
-    const { data } = await axios.post<STTTranscribeResponse>(
-      `${API_BASE_URL}/api/stt/transcribe`,
-      formData,
-      {
-        params: { userId },
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        signal,
+    const urlObj = new URL(`${API_BASE_URL}/api/stt/transcribe`, window.location.origin)
+    urlObj.searchParams.set('userId', userId)
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 60000)
+
+    const abortSignal = signal || controller.signal
+
+    try {
+      const response = await fetch(urlObj.toString(), {
+        method: 'POST',
+        body: formData,
+        signal: abortSignal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: 'Transcription failed' }))
+        throw new FetchError(data.error || 'Transcription failed', response.status)
       }
-    )
-    return data
+
+      return response.json()
+    } catch (error) {
+      clearTimeout(timeoutId)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new FetchError('Transcription timeout', 408, 'TIMEOUT')
+      }
+      throw error
+    }
   },
 }

@@ -1,6 +1,6 @@
-import axios from "axios";
 import { API_BASE_URL } from "@/config";
 import { settingsApi } from "./settings";
+import { fetchWrapper } from "./fetchWrapper";
 
 export type ProviderSource = "configured" | "local" | "builtin";
 
@@ -152,14 +152,14 @@ interface OpenCodeProviderResponse {
 
 async function getProvidersFromOpenCodeServer(): Promise<{ providers: Provider[]; connected: string[] }> {
   try {
-    const response = await axios.get<OpenCodeProviderResponse>(`${API_BASE_URL}/api/opencode/provider`);
-    
-    if (response?.data?.all && Array.isArray(response.data.all)) {
-      const connectedSet = new Set(response.data.connected || []);
-      
-      const providers = response.data.all.map((openCodeProvider: OpenCodeProvider) => {
+    const response = await fetchWrapper<OpenCodeProviderResponse>(`${API_BASE_URL}/api/opencode/provider`);
+
+    if (response?.all && Array.isArray(response.all)) {
+      const connectedSet = new Set(response.connected || []);
+
+      const providers = response.all.map((openCodeProvider: OpenCodeProvider) => {
         const models: Record<string, Model> = {};
-        
+
         Object.entries(openCodeProvider.models).forEach(([modelId, openCodeModel]) => {
           models[modelId] = {
             id: modelId,
@@ -203,7 +203,7 @@ async function getProvidersFromOpenCodeServer(): Promise<{ providers: Provider[]
         };
       });
 
-      return { providers, connected: response.data.connected || [] };
+      return { providers, connected: response.connected || [] };
     }
   } catch (error) {
     console.warn("Failed to load providers from OpenCode server", error);
@@ -267,7 +267,7 @@ async function getConfiguredProviders(connectedIds: Set<string>): Promise<Provid
 export async function getProvidersWithModels(): Promise<ProviderWithModels[]> {
   const { providers: builtinProviders, connected } = await getProviders();
   const connectedIds = new Set(connected);
-  
+
   const configuredProviders = await getConfiguredProviders(connectedIds);
   const configuredIds = new Set(configuredProviders.map((p) => p.id));
 
@@ -326,24 +326,28 @@ export function formatProviderName(
 
 export const providerCredentialsApi = {
   list: async (): Promise<string[]> => {
-    const { data } = await axios.get(`${API_BASE_URL}/api/providers/credentials`);
-    return data.providers;
+    const { providers } = await fetchWrapper<{ providers: string[] }>(`${API_BASE_URL}/api/providers/credentials`);
+    return providers;
   },
 
   getStatus: async (providerId: string): Promise<boolean> => {
-    const { data } = await axios.get(
+    const { hasCredentials } = await fetchWrapper<{ hasCredentials: boolean }>(
       `${API_BASE_URL}/api/providers/${providerId}/credentials/status`
     );
-    return data.hasCredentials;
+    return hasCredentials;
   },
 
   set: async (providerId: string, apiKey: string): Promise<void> => {
-    await axios.post(`${API_BASE_URL}/api/providers/${providerId}/credentials`, {
-      apiKey,
+    await fetchWrapper(`${API_BASE_URL}/api/providers/${providerId}/credentials`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey }),
     });
   },
 
   delete: async (providerId: string): Promise<void> => {
-    await axios.delete(`${API_BASE_URL}/api/providers/${providerId}/credentials`);
+    await fetchWrapper(`${API_BASE_URL}/api/providers/${providerId}/credentials`, {
+      method: 'DELETE',
+    });
   },
 };

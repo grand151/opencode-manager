@@ -1,5 +1,5 @@
-import axios, { type AxiosInstance } from 'axios'
 import type { paths } from './opencode-types'
+import { fetchWrapper } from './fetchWrapper'
 
 type SessionListResponse = paths['/session']['get']['responses']['200']['content']['application/json']
 type SessionResponse = paths['/session/{sessionID}']['get']['responses']['200']['content']['application/json']
@@ -17,165 +17,217 @@ type SendPromptResponse = paths['/session/{sessionID}/message']['post']['respons
 export type { SendPromptResponse }
 
 export class OpenCodeClient {
-  private client: AxiosInstance
   private baseURL: string
   private directory?: string
 
   constructor(baseURL: string, directory?: string) {
     this.baseURL = baseURL
     this.directory = directory
-    this.client = axios.create({
-      baseURL,
-      timeout: 30000
-    })
-    
-    this.client.interceptors.request.use((config) => {
-      if (this.directory) {
-        config.params = { ...config.params, directory: this.directory }
-      }
-      return config
-    })
   }
 
   setDirectory(directory: string) {
     this.directory = directory
   }
 
+  private getParams(params?: Record<string, unknown>) {
+    if (!this.directory) return params
+    return { ...params, directory: this.directory }
+  }
+
   async listSessions() {
-    const response = await this.client.get<SessionListResponse>('/session')
-    return response.data
+    return fetchWrapper<SessionListResponse>(`${this.baseURL}/session`, {
+      params: this.getParams(),
+    })
   }
 
   async getSession(sessionID: string) {
-    const response = await this.client.get<SessionResponse>(`/session/${sessionID}`)
-    return response.data
+    return fetchWrapper<SessionResponse>(`${this.baseURL}/session/${sessionID}`, {
+      params: this.getParams(),
+    })
   }
 
   async createSession(data: CreateSessionRequest) {
-    const response = await this.client.post<SessionResponse>('/session', data)
-    return response.data
+    return fetchWrapper<SessionResponse>(`${this.baseURL}/session`, {
+      method: 'POST',
+      params: this.getParams(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
   }
 
   async deleteSession(sessionID: string) {
-    await this.client.delete(`/session/${sessionID}`)
+    return fetchWrapper(`${this.baseURL}/session/${sessionID}`, {
+      method: 'DELETE',
+      params: this.getParams(),
+    })
   }
 
   async updateSession(sessionID: string, data: { title?: string }) {
-    const response = await this.client.patch(`/session/${sessionID}`, data)
-    return response.data
+    return fetchWrapper(`${this.baseURL}/session/${sessionID}`, {
+      method: 'PATCH',
+      params: this.getParams(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
   }
 
   async forkSession(sessionID: string, messageID?: string) {
-    const response = await this.client.post<SessionResponse>(`/session/${sessionID}/fork`, {
-      messageID
+    return fetchWrapper<SessionResponse>(`${this.baseURL}/session/${sessionID}/fork`, {
+      method: 'POST',
+      params: this.getParams(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageID }),
     })
-    return response.data
   }
 
   async abortSession(sessionID: string) {
-    await this.client.post(`/session/${sessionID}/abort`)
+    return fetchWrapper(`${this.baseURL}/session/${sessionID}/abort`, {
+      method: 'POST',
+      params: this.getParams(),
+    })
   }
 
   async listMessages(sessionID: string) {
-    const response = await this.client.get<MessageListResponse>(`/session/${sessionID}/message`)
-    return response.data
+    return fetchWrapper<MessageListResponse>(`${this.baseURL}/session/${sessionID}/message`, {
+      params: this.getParams(),
+    })
   }
 
   async sendPrompt(sessionID: string, data: SendPromptRequest): Promise<SendPromptResponse> {
-    const response = await this.client.post<SendPromptResponse>(
-      `/session/${sessionID}/message`,
-      data,
-      { timeout: 0 }
+    return fetchWrapper<SendPromptResponse>(
+      `${this.baseURL}/session/${sessionID}/message`,
+      {
+        method: 'POST',
+        params: this.getParams(),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        timeout: 0,
+      }
     )
-    return response.data
   }
 
   async summarizeSession(sessionID: string, providerID: string, modelID: string) {
-    const response = await this.client.post(`/session/${sessionID}/summarize`, {
-      providerID,
-      modelID
+    return fetchWrapper(`${this.baseURL}/session/${sessionID}/summarize`, {
+      method: 'POST',
+      params: this.getParams(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ providerID, modelID }),
     })
-    return response.data
   }
 
   async getConfig() {
-    const response = await this.client.get<ConfigResponse>('/config')
-    return response.data
+    return fetchWrapper<ConfigResponse>(`${this.baseURL}/config`, {
+      params: this.getParams(),
+    })
   }
 
   async updateConfig(config: Partial<ConfigResponse>) {
-    const response = await this.client.patch<ConfigResponse>('/config', config)
-    return response.data
+    return fetchWrapper<ConfigResponse>(`${this.baseURL}/config`, {
+      method: 'PATCH',
+      params: this.getParams(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
   }
 
   async getProviders() {
-    const response = await this.client.get('/provider')
-    return response.data
+    return fetchWrapper(`${this.baseURL}/provider`, {
+      params: this.getParams(),
+    })
   }
 
   async getConfigProviders() {
-    const response = await this.client.get('/config/providers')
-    return response.data
+    return fetchWrapper(`${this.baseURL}/config/providers`, {
+      params: this.getParams(),
+    })
   }
 
   async listCommands() {
-    const response = await this.client.get<CommandListResponse>('/command')
-    return response.data
+    return fetchWrapper<CommandListResponse>(`${this.baseURL}/command`, {
+      params: this.getParams(),
+    })
   }
 
   async sendCommand(sessionID: string, data: CommandRequest) {
-    const response = await this.client.post(`/session/${sessionID}/command`, data)
-    return response.data
+    return fetchWrapper(`${this.baseURL}/session/${sessionID}/command`, {
+      method: 'POST',
+      params: this.getParams(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
   }
 
   async sendShell(sessionID: string, data: ShellRequest) {
-    const response = await this.client.post(`/session/${sessionID}/shell`, data)
-    return response.data
+    return fetchWrapper(`${this.baseURL}/session/${sessionID}/shell`, {
+      method: 'POST',
+      params: this.getParams(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
   }
 
   async respondToPermission(sessionID: string, permissionID: string, response: 'once' | 'always' | 'reject') {
-    const result = await this.client.post(`/session/${sessionID}/permissions/${permissionID}`, { response })
-    return result.data
+    return fetchWrapper(`${this.baseURL}/session/${sessionID}/permissions/${permissionID}`, {
+      method: 'POST',
+      params: this.getParams(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ response }),
+    })
   }
 
   async replyToQuestion(requestID: string, answers: string[][]) {
-    const result = await this.client.post(`/question/${requestID}/reply`, { answers })
-    return result.data
+    return fetchWrapper(`${this.baseURL}/question/${requestID}/reply`, {
+      method: 'POST',
+      params: this.getParams(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answers }),
+    })
   }
 
   async rejectQuestion(requestID: string) {
-    const result = await this.client.post(`/question/${requestID}/reject`)
-    return result.data
+    return fetchWrapper(`${this.baseURL}/question/${requestID}/reject`, {
+      method: 'POST',
+      params: this.getParams(),
+    })
   }
 
   async listPendingQuestions() {
-    const response = await this.client.get<QuestionListResponse>('/question')
-    return response.data
+    return fetchWrapper<QuestionListResponse>(`${this.baseURL}/question`, {
+      params: this.getParams(),
+    })
   }
 
   async listAgents() {
-    const response = await this.client.get<AgentListResponse>('/agent')
-    return response.data
+    return fetchWrapper<AgentListResponse>(`${this.baseURL}/agent`, {
+      params: this.getParams(),
+    })
   }
 
   async revertMessage(sessionID: string, data: { messageID: string, partID?: string }) {
-    const response = await this.client.post(`/session/${sessionID}/revert`, data)
-    return response.data
+    return fetchWrapper(`${this.baseURL}/session/${sessionID}/revert`, {
+      method: 'POST',
+      params: this.getParams(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
   }
 
   async unrevertSession(sessionID: string) {
-    const response = await this.client.post(`/session/${sessionID}/unrevert`)
-    return response.data
+    return fetchWrapper(`${this.baseURL}/session/${sessionID}/unrevert`, {
+      method: 'POST',
+      params: this.getParams(),
+    })
   }
 
   async getSessionStatuses() {
-    const response = await this.client.get<Record<string, { type: 'idle' } | { type: 'busy' } | { type: 'retry'; attempt: number; message: string; next: number }>>('/session/status')
-    return response.data
+    return fetchWrapper<Record<string, { type: 'idle' } | { type: 'busy' } | { type: 'retry'; attempt: number; message: string; next: number }>>(`${this.baseURL}/session/status`, {
+      params: this.getParams(),
+    })
   }
 
   getEventSourceURL() {
-    const base = this.baseURL.startsWith('http') 
-      ? this.baseURL 
+    const base = this.baseURL.startsWith('http')
+      ? this.baseURL
       : `${window.location.origin}${this.baseURL}`
     const url = new URL(`${base}/event`)
     if (this.directory) {
